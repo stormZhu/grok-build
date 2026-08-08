@@ -6,7 +6,7 @@
 2. 能从用户输入一路追到模型调用和工具执行；
 3. 能为一个小改动找到合适的 crate，并用最小范围的命令验证它。
 
-深入的架构、Agent Loop、上下文与协议内容分别见 [02-architecture.md](./02-architecture.md)、[03-agent-loop.md](./03-agent-loop.md)、[04-context-management.md](./04-context-management.md) 与 [06-interfaces.md](./06-interfaces.md)。
+深入的架构、Agent Loop、上下文与协议内容分别见 [02-architecture.md](./02-architecture.md)、[03-agent-loop.md](./03-agent-loop.md)、[04-context-management.md](./04-context-management.md) 与 [06-interfaces.md](./06-interfaces.md)。想专门理解 SessionActor 的事件循环，可继续阅读 [源码精读/run-session.md](./deep-dives/run-session.md)。外部资料和进一步阅读入口见 [参考资料.md](./参考资料.md)。
 
 ---
 

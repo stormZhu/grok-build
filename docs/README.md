@@ -16,6 +16,7 @@
 
 | 文档 | 内容 |
 |------|------|
+| [参考资料.md](./参考资料.md) | 外部学习资料与仓库内部阅读入口 |
 | [01-learning-guide.md](./01-learning-guide.md) | 学习路径：编译、语言栈、核心概念、推荐阅读顺序 |
 | [02-architecture.md](./02-architecture.md) | 整体架构、分层、crate 地图、进程/入口模型 |
 | [03-agent-loop.md](./03-agent-loop.md) | Agent Loop：SessionActor、Turn、工具执行、生命周期钩子 |
@@ -24,6 +25,7 @@
 | [06-interfaces.md](./06-interfaces.md) | 对外/对内接口：ACP、Tool Protocol、Sampling、Leader、MCP |
 | [07-module-map.md](./07-module-map.md) | 模块地图：按职责索引关键源码路径 |
 | [08-build-troubleshooting.md](./08-build-troubleshooting.md) | 构建环境、DotSlash/protoc、Cargo 网络与首次编译排障 |
+| [源码精读](./deep-dives/README.md) | 针对具体函数、控制流和子系统的专题阅读；当前包含 `run_session` |
 
 ---
 
