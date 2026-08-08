@@ -21,13 +21,13 @@ let second = name;          // 这里才移动所有权
 
 ## 项目中的锚点
 
-- [`ToolContext`](../../crates/codegen/xai-grok-tools/src/types/context.rs) 传递借用的上下文，避免每次工具调用复制资源。
-- [`ShellState`](../../crates/codegen/xai-grok-tools/src/computer/local/shell_state.rs) 使用 `OwnedFd` 让文件描述符随所有者释放。
-- [`MemoryState`](../../crates/codegen/xai-grok-shell/src/session/memory_state.rs) 用 `RefCell` 保存只在单线程 Actor 内访问的可变状态。
+- [`TruncationConfig`](../../crates/codegen/xai-grok-tools/src/types/context.rs#L16) 传递拥有的配置，避免跨调用保存短生命周期借用。
+- [`ShellState`](../../crates/codegen/xai-grok-tools/src/computer/local/shell_state.rs#L258) 保存拥有的 `PathBuf` 和 `String` 快照。
+- [`SessionMemory`](../../crates/codegen/xai-grok-shell/src/session/memory_state.rs#L11) 用 `RefCell` 保存只在单线程 Actor 内访问的可变状态。
 
 ### 仓库代码摘录：借用后立即释放
 
-[`SessionMemory::storage`](../../crates/codegen/xai-grok-shell/src/session/memory_state.rs) 不把 `Ref` guard 交给调用方：
+[`SessionMemory::storage`](../../crates/codegen/xai-grok-shell/src/session/memory_state.rs#L67) 不把 `Ref` guard 交给调用方：
 
 ```rust
 pub(crate) fn storage(&self) -> Option<MemoryStorage> {

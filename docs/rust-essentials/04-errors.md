@@ -21,13 +21,13 @@ fn read_config(path: &std::path::Path) -> anyhow::Result<String> {
 
 ## 项目中的锚点
 
-- [`ComputerError` 与 I/O trait](../../crates/codegen/xai-grok-tools/src/computer/types.rs) 展示在工具边界转换错误。
-- [`retry.rs`](../../crates/codegen/xai-grok-tools/src/retry.rs) 区分操作错误和重试策略，而不是无条件重试。
-- [`validation.rs`](../../crates/codegen/xai-grok-config/src/validation.rs) 展示配置问题的记录与拒绝边界。
+- [`ComputerError`](../../crates/codegen/xai-grok-tools/src/computer/types.rs#L15) 与 I/O trait 展示在工具边界转换错误。
+- [`execute_with_backoff`](../../crates/codegen/xai-grok-tools/src/retry.rs#L47) 区分操作错误和重试策略，而不是无条件重试。
+- [`validate_requirements_layer`](../../crates/codegen/xai-grok-config/src/validation.rs#L186) 展示配置问题的记录与拒绝边界。
 
 ### 仓库代码摘录：区分 actor 已关闭与回复丢失
 
-[`LocalTerminalBackend::run`](../../crates/codegen/xai-grok-tools/src/computer/local/terminal.rs) 把两类通道错误转成不同上下文：
+[`LocalTerminalBackend::run`](../../crates/codegen/xai-grok-tools/src/computer/local/terminal.rs#L2452) 把两类通道错误转成不同上下文：
 
 ```rust
 self.cmd_tx.send(command).await

@@ -20,7 +20,7 @@ tokio::task::spawn_local(async { /* ... */ });
 - 使用 `spawn_local` 可以避免 `Send` 约束，`Rc`、`RefCell` 等非 `Send` 类型也能在 async 代码中使用
 - 性能更好，没有跨线程调度的开销
 
-来自 [`spawn.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/spawn.rs)：
+来自 [`build_session_runtime`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/spawn.rs#L44)：
 
 ```rust
 pub(crate) fn build_session_runtime() -> std::io::Result<tokio::runtime::Runtime> {

@@ -23,13 +23,13 @@ struct Config {
 
 ## 项目中的锚点
 
-- [`GoalStatus`](../../crates/codegen/xai-grok-shell/src/session/goal_tracker.rs) 为了线协议稳定性手写反序列化，并对序列化命名给出注释。
-- [`xai-chat-state` 类型](../../crates/codegen/xai-chat-state/src/types.rs) 展示会话状态的派生序列化。
-- [`xai-grok-config` loader](../../crates/codegen/xai-grok-config/src/loader.rs) 展示配置文件解析、错误报告和层叠加载。
+- [`GoalStatus`](../../crates/codegen/xai-grok-shell/src/session/goal_tracker.rs#L64) 为了线协议稳定性手写反序列化，并对序列化命名给出注释。
+- [`ChatStateSnapshot`](../../crates/codegen/xai-chat-state/src/types.rs#L30) 展示会话状态的派生序列化。
+- [`load_toml_file`](../../crates/codegen/xai-grok-config/src/loader.rs#L38) 展示配置文件解析、错误报告和层叠加载。
 
 ### 仓库代码摘录：兼容旧状态且默认安全
 
-[`GoalStatus`](../../crates/codegen/xai-grok-shell/src/session/goal_tracker.rs) 新写入使用 snake_case，仍接收历史名称：
+[`GoalStatus`](../../crates/codegen/xai-grok-shell/src/session/goal_tracker.rs#L62) 新写入使用 snake_case，仍接收历史名称：
 
 ```rust
 #[serde(rename_all = "snake_case")]

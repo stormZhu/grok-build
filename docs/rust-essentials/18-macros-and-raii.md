@@ -25,13 +25,13 @@ impl Drop for Restore<'_> {
 
 ## 项目中的锚点
 
-- [`resources.rs`](../../crates/codegen/xai-grok-tools/src/types/resources.rs) 含声明式资源注册宏和 async trait。
-- [`goal_strategist.rs`](../../crates/codegen/xai-grok-shell/src/session/goal_strategist.rs) 的 `PlanGuard` 展示作用域清理。
-- [`signed_policy.rs`](../../crates/codegen/xai-grok-config/src/signed_policy.rs) 的测试辅助 guard 展示状态恢复。
+- [`register_resource!`](../../crates/codegen/xai-grok-tools/src/types/resources.rs#L60) 含声明式资源注册宏和 async trait。
+- [`PlanGuard::drop`](../../crates/codegen/xai-grok-shell/src/session/goal_strategist.rs#L536) 展示作用域清理。
+- [`Restore::drop`](../../crates/codegen/xai-grok-config/src/signed_policy.rs#L113) 的测试辅助 guard 展示状态恢复。
 
 ### 仓库代码摘录：取消时仍恢复计划文件
 
-[`PlanGuard`](../../crates/codegen/xai-grok-shell/src/session/goal_strategist.rs) 的析构实现负责兜底：
+[`PlanGuard::drop`](../../crates/codegen/xai-grok-shell/src/session/goal_strategist.rs#L536) 的析构实现负责兜底：
 
 ```rust
 impl Drop for PlanGuard<'_> {

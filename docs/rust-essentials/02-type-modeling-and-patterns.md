@@ -26,13 +26,13 @@ fn message(reply: Reply) -> String {
 
 ## 项目中的锚点
 
-- [`ChatStateCommand`](../../crates/codegen/xai-chat-state/src/commands.rs) 是 Actor 命令枚举：变体同时携带命令所需数据与回复通道。
-- [`GoalStatus`](../../crates/codegen/xai-grok-shell/src/session/goal_tracker.rs) 用枚举维护可序列化的业务状态。
-- [`ToolOutput`](../../crates/codegen/xai-grok-tools/src/types/output.rs) 展示工具输出的类型化表达与 trait 实现。
+- [`ChatStateCommand`](../../crates/codegen/xai-chat-state/src/commands.rs#L56) 是 Actor 命令枚举：变体同时携带命令所需数据与回复通道。
+- [`GoalStatus`](../../crates/codegen/xai-grok-shell/src/session/goal_tracker.rs#L64) 用枚举维护可序列化的业务状态。
+- [`ToolOutput`](../../crates/codegen/xai-grok-tools/src/types/output.rs#L624) 展示工具输出的类型化表达与 trait 实现。
 
 ### 仓库代码摘录：命令的类型化回复
 
-[`ChatStateCommand`](../../crates/codegen/xai-chat-state/src/commands.rs) 让不同变体携带不同的数据和确认语义：
+[`ChatStateCommand`](../../crates/codegen/xai-chat-state/src/commands.rs#L56) 让不同变体携带不同的数据和确认语义：
 
 ```rust
 PushUserMessage { item: ConversationItem },

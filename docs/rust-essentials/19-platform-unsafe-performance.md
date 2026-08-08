@@ -14,9 +14,9 @@ Rust 2024 中修改进程环境变量也要求 `unsafe`，因为它与其他线�
 
 ## 项目中的锚点
 
-- [`shell_state.rs`](../../crates/codegen/xai-grok-tools/src/computer/local/shell_state.rs) 包含 pipe、`OwnedFd`、`fcntl` 和从 raw fd 转换的封装。
-- [`cgroup.rs`](../../crates/codegen/xai-grok-tools/src/computer/local/cgroup.rs) 是 Linux 系统调用和 RAII 清理的进阶实例。
-- [`macos_managed.rs`](../../crates/codegen/xai-grok-config/src/macos_managed.rs) 展示 macOS FFI 及其测试中的环境变量约束。
+- [`os_pipe`](../../crates/codegen/xai-grok-tools/src/computer/local/shell_state.rs#L566) 包含 pipe、`OwnedFd`、`fcntl` 和从 raw fd 转换的封装。
+- [`cgroup::linux`](../../crates/codegen/xai-grok-tools/src/computer/local/cgroup.rs#L76) 是 Linux 系统调用和 RAII 清理的进阶实例。
+- [`read_forced_requirements`](../../crates/codegen/xai-grok-config/src/macos_managed.rs#L76) 展示 macOS FFI 及其测试中的环境变量约束。
 
 ### 仓库代码摘录：将 FFI 所有权规则编码回安全类型
 

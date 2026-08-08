@@ -19,13 +19,13 @@ send(snapshot).await;
 
 ## 项目中的锚点
 
-- [`MemoryState`](../../crates/codegen/xai-grok-shell/src/session/memory_state.rs) 明确说明其 `RefCell` 只在 `LocalSet` 的 SessionActor 内使用。
-- [`streaming_local_terminal.rs`](../../crates/codegen/xai-grok-shell/src/terminal/streaming_local_terminal.rs) 展示 `Arc<Mutex<...>>` 管理跨 task 的终端状态。
-- [`resources.rs`](../../crates/codegen/xai-grok-tools/src/types/resources.rs) 展示共享资源与 trait 对象包装。
+- [`SessionMemory`](../../crates/codegen/xai-grok-shell/src/session/memory_state.rs#L11) 明确说明其 `RefCell` 只在 `LocalSet` 的 SessionActor 内使用。
+- [`TerminalEntry`](../../crates/codegen/xai-grok-shell/src/terminal/streaming_local_terminal.rs#L142) 展示 `Arc<Mutex<...>>` 管理跨 task 的终端状态。
+- [`SharedResources`](../../crates/codegen/xai-grok-tools/src/types/resources.rs#L181) 展示共享资源与 trait 对象包装。
 
 ### 仓库代码摘录：局部借用与原子状态分工
 
-[`SessionMemory`](../../crates/codegen/xai-grok-shell/src/session/memory_state.rs) 把两类状态明确分开：
+[`SessionMemory`](../../crates/codegen/xai-grok-shell/src/session/memory_state.rs#L34) 把两类状态明确分开：
 
 ```rust
 pub last_flush_content: RefCell<Option<String>>,

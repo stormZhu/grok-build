@@ -18,13 +18,13 @@ let value = handle.await??; // JoinError，再是 fetch 自身的 Result
 
 ## 项目中的锚点
 
-- [`run_loop.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs) 运行单线程会话 Actor，并使用本地 task。
-- [`search_bootstrap.rs`](../../crates/codegen/xai-grok-shell/src/session/storage/search_bootstrap.rs) 使用 `JoinSet` 管理一组并发任务。
-- [`xai-tracing::tokio`](../../crates/common/xai-tracing/src/tokio.rs) 说明 task 创建时如何传播 tracing 上下文。
+- [`run_loop.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs#L309) 运行单线程会话 Actor，并使用本地 task。
+- [`search_bootstrap.rs`](../../crates/codegen/xai-grok-shell/src/session/storage/search_bootstrap.rs#L484) 使用 `JoinSet` 管理一组并发任务。
+- [`xai-tracing::spawn_traced`](../../crates/common/xai-tracing/src/tokio.rs#L16) 说明 task 创建时如何传播 tracing 上下文。
 
 ### 仓库代码摘录：同一个 Actor 的两种调度边界
 
-[`LocalTerminalBackend`](../../crates/codegen/xai-grok-tools/src/computer/local/terminal.rs) 根据调用环境选择 task：
+[`LocalTerminalBackend::new_with_ttl`](../../crates/codegen/xai-grok-tools/src/computer/local/terminal.rs#L2383) 根据调用环境选择 task：
 
 ```rust
 if use_spawn_local {

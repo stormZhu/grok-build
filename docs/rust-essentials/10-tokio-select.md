@@ -103,7 +103,7 @@ tokio::select! {
 
 ## 10.3 实际项目代码
 
-来自 [`run_loop.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs)：
+来自 [`run_loop.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs#L309)：
 
 ```rust
 loop {

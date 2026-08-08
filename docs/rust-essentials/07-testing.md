@@ -20,13 +20,13 @@ async fn stops_when_cancelled() { /* I/O、channel 或 task */ }
 
 ## 项目中的锚点
 
-- [`MockFs`](../../crates/codegen/xai-grok-tools/src/computer/local/mock_fs.rs) 展示 `AsyncFileSystem` 的测试替身。
-- [`persistence_tests.rs`](../../crates/codegen/xai-grok-shell/src/session/persistence_tests.rs) 覆盖异步持久化成功和失败分支。
-- [`loader.rs`](../../crates/codegen/xai-grok-config/src/loader.rs) 使用 `tempfile` 与环境变量 guard 测试配置加载。
+- [`MockFs`](../../crates/codegen/xai-grok-tools/src/computer/local/mock_fs.rs#L12) 展示 `AsyncFileSystem` 的测试替身。
+- [`persistence_tests.rs`](../../crates/codegen/xai-grok-shell/src/session/persistence_tests.rs#L71) 覆盖异步持久化成功和失败分支。
+- [`loader.rs`](../../crates/codegen/xai-grok-config/src/loader.rs#L702) 使用 `tempfile` 与环境变量 guard 测试配置加载。
 
 ### 仓库代码摘录：用内存实现验证 I/O 契约
 
-[`MockFs`](../../crates/codegen/xai-grok-tools/src/computer/local/mock_fs.rs) 不接触真实磁盘：
+[`MockFs`](../../crates/codegen/xai-grok-tools/src/computer/local/mock_fs.rs#L12) 不接触真实磁盘：
 
 ```rust
 pub struct MockFs {

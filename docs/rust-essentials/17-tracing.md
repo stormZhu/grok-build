@@ -32,7 +32,7 @@ tracing::info!(
 
 ## 17.3 span 与任务上下文
 
-事件是一次日志记录；span 表示一段带上下文的工作。对请求、工具调用或后台任务建立 span，字段会自动附着到 span 内的事件。`tokio::spawn` 创建新任务时需确认 tracing 上下文是否被传播；项目的 [`xai-tracing`](../../crates/common/xai-tracing/src/tokio.rs) 提供了相应辅助工具。
+事件是一次日志记录；span 表示一段带上下文的工作。对请求、工具调用或后台任务建立 span，字段会自动附着到 span 内的事件。`tokio::spawn` 创建新任务时需确认 tracing 上下文是否被传播；项目的 [`xai-tracing::spawn_traced`](../../crates/common/xai-tracing/src/tokio.rs#L16) 提供了相应辅助工具。
 
 ```rust
 let span = tracing::info_span!("tool_call", tool = %name);

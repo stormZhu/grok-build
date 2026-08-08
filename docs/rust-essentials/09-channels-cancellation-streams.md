@@ -4,7 +4,7 @@ Actor 的核心是“拥有状态的 task 接收命令”，通道决定消息�
 
 | 工具 | 适用语义 | 项目例子 |
 | --- | --- | --- |
-| `mpsc` | 多个发送者、一位消费者的命令队列；有界容量提供背压 | [`LocalTerminalBackend`](../../crates/codegen/xai-grok-tools/src/computer/local/terminal.rs) |
+| `mpsc` | 多个发送者、一位消费者的命令队列；有界容量提供背压 | [`LocalTerminalBackend`](../../crates/codegen/xai-grok-tools/src/computer/local/terminal.rs#L2396) |
 | `oneshot` | 一次请求对应一次回复 | 同文件中的 `reply_tx` / `reply_rx` |
 | `watch` | 只关心最新状态，慢接收者可跳过中间值 | [13 watch 通道](./13-watch-channel.md) |
 | `broadcast` | 每个接收者都应看到事件；慢接收者要处理 lag | 适合订阅型事件，不适合命令 |
@@ -26,9 +26,9 @@ Stream 是按时间产生多个值的异步序列。使用 `StreamExt::next()` �
 
 ## 项目中的锚点
 
-- [`terminal.rs`](../../crates/codegen/xai-grok-tools/src/computer/local/terminal.rs) 同时使用有界 `mpsc`、`oneshot` 和 `CancellationToken`。
-- [`hooks.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session/hooks.rs) 使用 `FuturesUnordered` 消费并发 hook 的结果。
-- [`leader/server.rs`](../../crates/codegen/xai-grok-shell/src/leader/server.rs) 有多处请求级取消 token，适合追踪取消的传递路径。
+- [`terminal.rs`](../../crates/codegen/xai-grok-tools/src/computer/local/terminal.rs#L2396) 同时使用有界 `mpsc`、`oneshot` 和 `CancellationToken`。
+- [`hooks.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session/hooks.rs#L211) 使用 `FuturesUnordered` 消费并发 hook 的结果。
+- [`leader/server.rs`](../../crates/codegen/xai-grok-shell/src/leader/server.rs#L2633) 有多处请求级取消 token，适合追踪取消的传递路径。
 
 ### 仓库代码摘录：命令与回复分成两条通道
 

@@ -22,9 +22,9 @@ cargo fmt --all -- --check
 
 ## 项目中的锚点
 
-- 根 [`Cargo.toml`](../../Cargo.toml) 定义 workspace 成员、统一依赖与生成限制。
-- [`xai-grok-tools/Cargo.toml`](../../crates/codegen/xai-grok-tools/Cargo.toml) 是一个包含工具运行时依赖的实际 crate manifest。
-- [`rust-toolchain.toml`](../../rust-toolchain.toml) 固定 Rust 1.94、rustfmt、clippy 和目标平台。
+- 根 [`Cargo.toml`](../../Cargo.toml#L6) 定义 workspace 成员、统一依赖与生成限制。
+- [`xai-grok-tools/Cargo.toml`](../../crates/codegen/xai-grok-tools/Cargo.toml#L8) 是一个包含工具运行时依赖的实际 crate manifest。
+- [`rust-toolchain.toml`](../../rust-toolchain.toml#L11) 固定 Rust 1.94、rustfmt、clippy 和目标平台。
 
 ### 仓库代码摘录：版本由 workspace 统一
 

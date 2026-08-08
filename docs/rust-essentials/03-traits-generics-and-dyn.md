@@ -19,13 +19,13 @@ fn load_dyn(store: &dyn Store, key: &str) -> Option<String> { store.get(key) }
 
 ## 项目中的锚点
 
-- [`AsyncFileSystem` 与 `TerminalBackend`](../../crates/codegen/xai-grok-tools/src/computer/types.rs) 定义可替换的 I/O 边界，生产和测试实现共用同一契约。
-- [`ManagedGatewayToolCaller`](../../crates/codegen/xai-grok-tools/src/types/resources.rs) 展示 `#[async_trait]`、`Send + Sync` 与 `Arc<dyn Trait>`。
-- [`MockFs`](../../crates/codegen/xai-grok-tools/src/computer/local/mock_fs.rs) 是通过 trait 替换真实文件系统的简单例子。
+- [`AsyncFileSystem`](../../crates/codegen/xai-grok-tools/src/computer/types.rs#L52) 与 [`TerminalBackend`](../../crates/codegen/xai-grok-tools/src/computer/types.rs#L286) 定义可替换的 I/O 边界，生产和测试实现共用同一契约。
+- [`ManagedGatewayToolCaller`](../../crates/codegen/xai-grok-tools/src/types/resources.rs#L568) 展示 `#[async_trait]`、`Send + Sync` 与 `Arc<dyn Trait>`。
+- [`MockFs`](../../crates/codegen/xai-grok-tools/src/computer/local/mock_fs.rs#L12) 是通过 trait 替换真实文件系统的简单例子。
 
 ### 仓库代码摘录：I/O 契约先于实现
 
-[`AsyncFileSystem`](../../crates/codegen/xai-grok-tools/src/computer/types.rs) 明确了工具层对文件系统的最小要求：
+[`AsyncFileSystem`](../../crates/codegen/xai-grok-tools/src/computer/types.rs#L52) 明确了工具层对文件系统的最小要求：
 
 ```rust
 #[async_trait::async_trait]
