@@ -1,5 +1,7 @@
 # 2. Pin 与异步 Future
 
+> Pin 是 Future 实现细节的一部分。普通业务代码通常只需在 `select!` 中复用 Future 或调用需要 `Pin<&mut T>` 的 API 时理解它；任务模型见 [13. async、任务与 `Send`](./13-async-runtime-tasks.md)。
+
 ## 通俗理解
 
 ### 先理解问题：为什么需要 Pin？
@@ -74,6 +76,12 @@ if let Some(timeout) = session.idle_flush_timeout {
 ---
 
 ## 永不触发的定时器技巧
+
+## 常见边界
+
+- `Pin` 不等于线程安全，也不等于不可修改；它限制的是值在内存中的移动方式。
+- `tokio::pin!` 固定局部变量的存放位置，适合当前 async 作用域；把 future 放进结构体或跨 API 保存时，要重新确认其类型与生命周期。
+- 在 `select!` 中反复构造 future 会丢掉先前进度；需要等待同一个 `Sleep`、stream 或操作时，应在循环外创建并按 API 要求 pin/reset。
 
 项目里有个巧妙用法：功能没开启时，设一个**永不到期**的定时器，配合 `select!` 的 `if` 守卫，零开销跳过：
 

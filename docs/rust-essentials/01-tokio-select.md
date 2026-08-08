@@ -1,5 +1,7 @@
 # 1. tokio::select! 宏
 
+> 在阅读本篇前，先了解 [13. async、任务与 `Send`](./13-async-runtime-tasks.md)；通道与取消语义见 [14. 通道、取消与 Stream](./14-channels-cancellation-streams.md)。
+
 `select!` 同时等待多个异步操作，**哪个先完成就执行哪个**，其余的被取消。
 
 ---
@@ -101,7 +103,7 @@ tokio::select! {
 
 ## 1.3 实际项目代码
 
-来自 [run_loop.rs](file:///Users/yuqing/Documents/workspace/grok-study/grok-build/crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs#L309-L368)：
+来自 [`run_loop.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs)：
 
 ```rust
 loop {
@@ -173,3 +175,9 @@ result = some_future() => {
 Ok(data) = fallible_future() => { ... }
 Err(e) = fallible_future() => { ... }
 ```
+
+## 1.7 取消安全与公平性
+
+未选中的分支 future 会被丢弃，因此每个分支都应是取消安全的，或在下次进入循环后能正确恢复。读取一次消息、推进一次流或修改外部状态的 future 若在 poll 中途被丢弃，可能造成丢事件或重复操作；优先把状态保存在 loop 外，或使用明确记录进度的 API。
+
+`biased;` 不是性能开关，而是调度策略。高频且排在前面的就绪分支可能饿死后面的分支；只有存在明确优先级时使用，并将关闭/取消等必须及时响应的分支放在合适位置。

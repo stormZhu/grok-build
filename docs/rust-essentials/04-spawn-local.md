@@ -1,5 +1,7 @@
 # 4. tokio::spawn_local 与单线程运行时
 
+> `spawn_local` 解决 `!Send` 状态的调度约束；任务所有权、JoinHandle 与阻塞工作见 [13. async、任务与 `Send`](./13-async-runtime-tasks.md)。
+
 ## 4.1 spawn vs spawn_local
 
 ```rust
@@ -18,7 +20,7 @@ tokio::task::spawn_local(async { /* ... */ });
 - 使用 `spawn_local` 可以避免 `Send` 约束，`Rc`、`RefCell` 等非 `Send` 类型也能在 async 代码中使用
 - 性能更好，没有跨线程调度的开销
 
-来自 [spawn.rs](file:///Users/yuqing/Documents/workspace/grok-study/grok-build/crates/codegen/xai-grok-shell/src/session/acp_session_impl/spawn.rs#L44-L48)：
+来自 [`spawn.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/spawn.rs)：
 
 ```rust
 pub(crate) fn build_session_runtime() -> std::io::Result<tokio::runtime::Runtime> {
@@ -29,6 +31,10 @@ pub(crate) fn build_session_runtime() -> std::io::Result<tokio::runtime::Runtime
 ```
 
 ## 4.3 spawn_local 的实际使用
+
+## 4.4 生命周期边界
+
+`spawn_local` 仍要求任务在有效的 `LocalSet` 或 local runtime 上运行；从普通 `tokio::spawn` task 中随意调用会 panic。它也不让借用局部变量跨 task 存活：task 往往仍需要 `move` 捕获拥有值或 `Rc`/`Arc`。单线程只消除了跨线程共享，不消除重入、取消和跨 `.await` 的状态一致性问题。
 
 ```rust
 // 在 select! 分支中 spawn 后台任务，不阻塞事件循环
