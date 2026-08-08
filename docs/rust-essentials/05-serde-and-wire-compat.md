@@ -1,4 +1,4 @@
-# 12. Serde、配置与线协议兼容性
+# 5. Serde、配置与线协议兼容性
 
 `Serialize` / `Deserialize` 让 Rust 类型跨越 JSON、TOML、持久化文件和协议边界。对外数据的字段名与缺失字段行为是契约，不能把 derive 当作纯内部实现细节。
 

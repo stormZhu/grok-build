@@ -1,4 +1,4 @@
-# 16. Cargo workspace、feature 与验证范围
+# 6. Cargo workspace、feature 与验证范围
 
 本仓库是一个多 crate workspace。把 package 当成独立构建与依赖边界，而不是把 `crates/` 当作普通源码子目录。
 

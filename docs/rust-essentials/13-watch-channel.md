@@ -1,12 +1,12 @@
-# 5. tokio::sync::watch 通道
+# 13. tokio::sync::watch 通道
 
-> 通道选型、取消和背压见 [14. 通道、取消与 Stream](./14-channels-cancellation-streams.md)。
+> 通道选型、取消和背压见 [9. 通道、取消与 Stream](./09-channels-cancellation-streams.md)。
 
-## 5.1 基本概念
+## 13.1 基本概念
 
 `watch` 是一个**单生产者、多消费者**通道，用于广播状态变化。它始终保存最新值，新订阅者立即收到当前值。
 
-## 5.2 核心 API
+## 13.2 核心 API
 
 ```rust
 use tokio::sync::watch;
@@ -22,7 +22,7 @@ rx.changed().await.unwrap();     // 等待直到值发生变化
 let val = *rx.borrow_and_update(); // 读取当前值并标记为"已读"
 ```
 
-## 5.3 项目中的使用
+## 13.3 项目中的使用
 
 ```rust
 // 订阅模型切换通知
@@ -42,9 +42,9 @@ tokio::select! {
 }
 ```
 
-## 5.4 关键细节
+## 13.4 关键细节
 
-## 5.5 何时不要用 watch
+## 13.5 何时不要用 watch
 
 `watch` 只保证接收者最终能读取最新值，不能保证看见每一次中间更新。它适合配置、开关、当前状态；需要按顺序处理每个命令用 `mpsc`，需要一问一答用 `oneshot`，需要每个订阅者处理事件则评估 `broadcast`。发送者全部 drop 后，`changed()` 会返回错误，循环应明确处理关闭语义。
 

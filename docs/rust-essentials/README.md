@@ -8,9 +8,9 @@
 
 | 阶段 | 必读专题 | 完成后应能做到 |
 | --- | --- | --- |
-| 语言与类型 | [所有权、借用与生命周期](./08-ownership-and-borrowing.md)、[类型建模与模式匹配](./09-type-modeling-and-patterns.md)、[trait、泛型与动态分发](./10-traits-generics-and-dyn.md)、[错误处理](./11-errors.md) | 解释一个值由谁拥有、一个错误如何传播、一个 trait 的边界为何存在 |
-| 数据与工程 | [Serde 与线协议兼容性](./12-serde-and-wire-compat.md)、[Cargo workspace](./16-cargo-workspace.md)、[测试](./17-testing.md) | 安全修改配置、协议和 crate 依赖，并以最小范围验证 |
-| 异步运行时 | [async、任务与 `Send`](./13-async-runtime-tasks.md)、[通道、取消与 Stream](./14-channels-cancellation-streams.md)、现有 01--07 专题 | 跟踪 Actor 消息、取消、状态共享和任务边界 |
+| 语言与类型 | [所有权、借用与生命周期](./01-ownership-and-borrowing.md)、[类型建模与模式匹配](./02-type-modeling-and-patterns.md)、[trait、泛型与动态分发](./03-traits-generics-and-dyn.md)、[错误处理](./04-errors.md) | 解释一个值由谁拥有、一个错误如何传播、一个 trait 的边界为何存在 |
+| 数据与工程 | [Serde 与线协议兼容性](./05-serde-and-wire-compat.md)、[Cargo workspace](./06-cargo-workspace.md)、[测试](./07-testing.md) | 安全修改配置、协议和 crate 依赖，并以最小范围验证 |
+| 异步运行时 | [async、任务与 `Send`](./08-async-runtime-tasks.md)、[通道、取消与 Stream](./09-channels-cancellation-streams.md)、10--17 专题 | 跟踪 Actor 消息、取消、状态共享和任务边界 |
 | 维护与进阶 | [宏与 RAII](./18-macros-and-raii.md)、[平台、`unsafe` 与性能](./19-platform-unsafe-performance.md) | 修改底层或平台相关代码时知道先验证哪些不变量 |
 
 ## 专题索引
@@ -19,32 +19,31 @@
 
 | 文档 | 要点 |
 | --- | --- |
-| [08 所有权、借用与生命周期](./08-ownership-and-borrowing.md) | 移动、`Clone`、借用、字符串与路径类型、生命周期的阅读方法 |
-| [09 类型建模与模式匹配](./09-type-modeling-and-patterns.md) | `struct`、`enum`、`Option`、`Result`、`match`、迭代器和闭包 |
-| [10 trait、泛型与动态分发](./10-traits-generics-and-dyn.md) | trait bound、关联类型、`impl Trait`、`dyn Trait`、`Send + Sync` |
-| [11 错误处理](./11-errors.md) | `?`、错误上下文、恢复与 fail-closed 边界 |
-| [12 Serde 与线协议兼容性](./12-serde-and-wire-compat.md) | derive、字段名、默认值、版本兼容与 JSON/TOML 边界 |
+| [01 所有权、借用与生命周期](./01-ownership-and-borrowing.md) | 移动、`Clone`、借用、字符串与路径类型、生命周期的阅读方法 |
+| [02 类型建模与模式匹配](./02-type-modeling-and-patterns.md) | `struct`、`enum`、`Option`、`Result`、`match`、迭代器和闭包 |
+| [03 trait、泛型与动态分发](./03-traits-generics-and-dyn.md) | trait bound、关联类型、`impl Trait`、`dyn Trait`、`Send + Sync` |
+| [04 错误处理](./04-errors.md) | `?`、错误上下文、恢复与 fail-closed 边界 |
+| [05 Serde 与线协议兼容性](./05-serde-and-wire-compat.md) | derive、字段名、默认值、版本兼容与 JSON/TOML 边界 |
 
 ### Tokio 与并发
 
 | 文档 | 要点 |
 | --- | --- |
-| [13 async、任务与 `Send`](./13-async-runtime-tasks.md) | Future、`.await`、`spawn`、`spawn_local`、任务生命周期 |
-| [14 通道、取消与 Stream](./14-channels-cancellation-streams.md) | `mpsc`、`oneshot`、`watch`、`broadcast`、背压、`CancellationToken` |
-| [01 tokio::select!](./01-tokio-select.md) | 多路等待、`biased;`、条件守卫、模式匹配 |
-| [02 Pin 与 Future](./02-pin-and-future.md) | `tokio::pin!`、`Sleep::reset()`、可移动性 |
-| [03 Atomic 与 Ordering](./03-atomic-ordering.md) | 原子状态与内存序 |
-| [04 spawn_local](./04-spawn-local.md) | 单线程 `LocalSet` 与 `!Send` 状态 |
-| [05 watch 通道](./05-watch-channel.md) | 最新值通知与 `borrow_and_update()` |
-| [06 共享状态](./06-arc-mutex-rwlock.md) | `Arc`、锁、`RefCell` 与跨 `.await` 风险 |
+| [08 async、任务与 `Send`](./08-async-runtime-tasks.md) | Future、`.await`、`spawn`、`spawn_local`、任务生命周期 |
+| [09 通道、取消与 Stream](./09-channels-cancellation-streams.md) | `mpsc`、`oneshot`、`watch`、`broadcast`、背压、`CancellationToken` |
+| [10 tokio::select!](./10-tokio-select.md) | 多路等待、`biased;`、条件守卫、模式匹配 |
+| [11 Pin 与 Future](./11-pin-and-future.md) | `tokio::pin!`、`Sleep::reset()`、可移动性 |
+| [12 spawn_local](./12-spawn-local.md) | 单线程 `LocalSet` 与 `!Send` 状态 |
+| [13 watch 通道](./13-watch-channel.md) | 最新值通知与 `borrow_and_update()` |
+| [14 共享状态](./14-arc-mutex-rwlock.md) | `Arc`、锁、`RefCell` 与跨 `.await` 风险 |
+| [15 内部可变性与锁](./15-interior-mutability-and-locks.md) | `RefCell`、同步/异步锁与跨 `.await` 风险 |
+| [16 Atomic 与 Ordering](./16-atomic-ordering.md) | 原子状态与内存序 |
 
 ### 工程实践与进阶
 
 | 文档 | 要点 |
 | --- | --- |
-| [07 tracing](./07-tracing.md) | 结构化字段、span、任务上下文 |
-| [16 Cargo workspace](./16-cargo-workspace.md) | package、feature、依赖边界与局部验证 |
-| [17 测试](./17-testing.md) | 同步/异步测试、mock、临时目录、环境变量隔离 |
+| [17 tracing](./17-tracing.md) | 结构化字段、span、任务上下文 |
 | [18 宏与 RAII](./18-macros-and-raii.md) | `derive`、声明式宏、`Drop` 清理 guard |
 | [19 平台、unsafe 与性能](./19-platform-unsafe-performance.md) | 文件描述符、FFI、安全不变量、测量先行 |
 

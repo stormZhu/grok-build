@@ -1,8 +1,8 @@
-# 4. tokio::spawn_local 与单线程运行时
+# 12. tokio::spawn_local 与单线程运行时
 
-> `spawn_local` 解决 `!Send` 状态的调度约束；任务所有权、JoinHandle 与阻塞工作见 [13. async、任务与 `Send`](./13-async-runtime-tasks.md)。
+> `spawn_local` 解决 `!Send` 状态的调度约束；任务所有权、JoinHandle 与阻塞工作见 [8. async、任务与 `Send`](./08-async-runtime-tasks.md)。
 
-## 4.1 spawn vs spawn_local
+## 12.1 spawn vs spawn_local
 
 ```rust
 // spawn: 可以在多线程运行时中使用，future 必须实现 Send
@@ -12,7 +12,7 @@ tokio::spawn(async { /* ... */ });
 tokio::task::spawn_local(async { /* ... */ });
 ```
 
-## 4.2 为什么这个项目用 spawn_local
+## 12.2 为什么这个项目用 spawn_local
 
 这个项目为每个会话创建**独立的单线程 tokio 运行时**（`current_thread`），因此：
 
@@ -30,9 +30,9 @@ pub(crate) fn build_session_runtime() -> std::io::Result<tokio::runtime::Runtime
 }
 ```
 
-## 4.3 spawn_local 的实际使用
+## 12.3 spawn_local 的实际使用
 
-## 4.4 生命周期边界
+## 12.4 生命周期边界
 
 `spawn_local` 仍要求任务在有效的 `LocalSet` 或 local runtime 上运行；从普通 `tokio::spawn` task 中随意调用会 panic。它也不让借用局部变量跨 task 存活：task 往往仍需要 `move` 捕获拥有值或 `Rc`/`Arc`。单线程只消除了跨线程共享，不消除重入、取消和跨 `.await` 的状态一致性问题。
 

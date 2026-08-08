@@ -1,4 +1,4 @@
-# 14. 通道、取消、背压与 Stream
+# 9. 通道、取消、背压与 Stream
 
 Actor 的核心是“拥有状态的 task 接收命令”，通道决定消息的所有权、回复方式与背压策略。
 
@@ -6,7 +6,7 @@ Actor 的核心是“拥有状态的 task 接收命令”，通道决定消息�
 | --- | --- | --- |
 | `mpsc` | 多个发送者、一位消费者的命令队列；有界容量提供背压 | [`LocalTerminalBackend`](../../crates/codegen/xai-grok-tools/src/computer/local/terminal.rs) |
 | `oneshot` | 一次请求对应一次回复 | 同文件中的 `reply_tx` / `reply_rx` |
-| `watch` | 只关心最新状态，慢接收者可跳过中间值 | [05 watch 通道](./05-watch-channel.md) |
+| `watch` | 只关心最新状态，慢接收者可跳过中间值 | [13 watch 通道](./13-watch-channel.md) |
 | `broadcast` | 每个接收者都应看到事件；慢接收者要处理 lag | 适合订阅型事件，不适合命令 |
 
 ## 取消不是自动发生的

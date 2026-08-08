@@ -1,6 +1,6 @@
-# 2. Pin 与异步 Future
+# 11. Pin 与异步 Future
 
-> Pin 是 Future 实现细节的一部分。普通业务代码通常只需在 `select!` 中复用 Future 或调用需要 `Pin<&mut T>` 的 API 时理解它；任务模型见 [13. async、任务与 `Send`](./13-async-runtime-tasks.md)。
+> Pin 是 Future 实现细节的一部分。普通业务代码通常只需在 `select!` 中复用 Future 或调用需要 `Pin<&mut T>` 的 API 时理解它；任务模型见 [8. async、任务与 `Send`](./08-async-runtime-tasks.md)。
 
 ## 通俗理解
 

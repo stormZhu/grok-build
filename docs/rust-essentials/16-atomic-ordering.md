@@ -1,12 +1,12 @@
-# 3. Atomic 类型与 Ordering
+# 16. Atomic 类型与 Ordering
 
 > Atomic 适合独立的计数或状态位。锁、`RefCell` 和多字段不变量的选择见 [15. 内部可变性与锁](./15-interior-mutability-and-locks.md)。
 
-## 3.1 为什么需要 Atomic
+## 16.1 为什么需要 Atomic
 
 在异步/多线程环境中，多个任务可能同时读写同一个变量。`Atomic*` 类型提供**无锁**的原子操作，比 `Mutex` 轻量得多。
 
-## 3.2 常用类型
+## 16.2 常用类型
 
 | 类型 | 用途 |
 |------|------|
@@ -14,7 +14,7 @@
 | `AtomicUsize` | 计数器（如 `last_flush_len`） |
 | `AtomicU64` | 大数值计数器 |
 
-## 3.3 核心操作
+## 16.3 核心操作
 
 ```rust
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -31,7 +31,7 @@ counter.store(42, Ordering::Relaxed);
 counter.fetch_add(1, Ordering::AcqRel);
 ```
 
-## 3.4 Ordering 选择指南
+## 16.4 Ordering 选择指南
 
 | Ordering | 含义 | 适用场景 |
 |----------|------|----------|
@@ -41,9 +41,9 @@ counter.fetch_add(1, Ordering::AcqRel);
 | `AcqRel` | 同时具有 Acquire 和 Release 语义 | `fetch_add` 等读-改-写操作 |
 | `SeqCst` | 最强保证，全局顺序一致 | 需要最强保证但很少必要 |
 
-## 3.5 项目中的实际使用
+## 16.5 项目中的实际使用
 
-## 3.6 不要用 Atomic 拼装状态机
+## 16.6 不要用 Atomic 拼装状态机
 
 `Relaxed` 只保证单个操作的原子性。若一个标志的可见性依赖另一段数据已初始化，或多个字段必须一起变化，单独的多个 Atomic 往往不足以表达不变量。此时优先用 Actor 消息、锁，或在有明确证明和测试时采用 release/acquire 协议。
 

@@ -1,6 +1,6 @@
-# 1. tokio::select! 宏
+# 10. tokio::select! 宏
 
-> 在阅读本篇前，先了解 [13. async、任务与 `Send`](./13-async-runtime-tasks.md)；通道与取消语义见 [14. 通道、取消与 Stream](./14-channels-cancellation-streams.md)。
+> 在阅读本篇前，先了解 [8. async、任务与 `Send`](./08-async-runtime-tasks.md)；通道与取消语义见 [9. 通道、取消与 Stream](./09-channels-cancellation-streams.md)。
 
 `select!` 同时等待多个异步操作，**哪个先完成就执行哪个**，其余的被取消。
 
@@ -71,7 +71,7 @@ changed = model_switch_rx.changed() => { ... }
 
 ---
 
-## 1.1 基本语法
+## 10.1 基本语法
 
 ```rust
 tokio::select! {
@@ -85,7 +85,7 @@ tokio::select! {
 }
 ```
 
-## 1.2 完整分支结构
+## 10.2 完整分支结构
 
 一个分支由三部分组成，用**逗号**分隔：
 
@@ -101,7 +101,7 @@ tokio::select! {
 | ③ `=>`                  | 分隔符                          | ✅ 必须  |
 | ④ `{ 处理代码 }`        | future 就绪后执行               | ✅ 必须  |
 
-## 1.3 实际项目代码
+## 10.3 实际项目代码
 
 来自 [`run_loop.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs)：
 
@@ -136,7 +136,7 @@ loop {
 }
 ```
 
-## 1.4 `biased;` 模式修饰符
+## 10.4 `biased;` 模式修饰符
 
 ```rust
 tokio::select! {
@@ -148,7 +148,7 @@ tokio::select! {
 - **默认**：多个 future 同时就绪时，**随机**选择一个（公平轮询）
 - **`biased;`**：多个 future 同时就绪时，**按书写顺序**优先选择排在前面的
 
-## 1.5 `if` 条件守卫详解
+## 10.5 `if` 条件守卫详解
 
 ```rust
 _ = &mut idle_flush_sleep, if 条件A && 条件B => { ... }
@@ -160,7 +160,7 @@ _ = &mut idle_flush_sleep, if 条件A && 条件B => { ... }
 
 **为什么用 `if` 守卫？** 当用户没有配置超时（`timeout` 为 `None`）时，对应的 `Sleep` 被设为 `Duration::MAX`（永不触发）。用 `if` 守卫直接跳过，避免无意义地 poll 一个永远不会到期的 future，零开销。
 
-## 1.6 模式匹配接收返回值
+## 10.6 模式匹配接收返回值
 
 ```rust
 // 忽略返回值
@@ -176,7 +176,7 @@ Ok(data) = fallible_future() => { ... }
 Err(e) = fallible_future() => { ... }
 ```
 
-## 1.7 取消安全与公平性
+## 10.7 取消安全与公平性
 
 未选中的分支 future 会被丢弃，因此每个分支都应是取消安全的，或在下次进入循环后能正确恢复。读取一次消息、推进一次流或修改外部状态的 future 若在 poll 中途被丢弃，可能造成丢事件或重复操作；优先把状态保存在 loop 外，或使用明确记录进度的 API。
 
