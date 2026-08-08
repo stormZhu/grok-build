@@ -27,15 +27,147 @@ let second = name;          // 这里才移动所有权
 
 ### 仓库代码摘录：借用后立即释放
 
-[`SessionMemory::storage`](../../crates/codegen/xai-grok-shell/src/session/memory_state.rs#L67) 不把 `Ref` guard 交给调用方：
+[`SessionMemory::storage`](../../crates/codegen/xai-grok-shell/src/session/memory_state.rs#L67) 不把 `Ref` guard 交给调用方。先看这个方法涉及的两个结构体。实际源码中的 `SessionMemory` 还包含 flush 配置、计数器等其他字段；为了聚焦 `storage`，下面的示例只列出与本例相关的字段，其他字段用注释标记：
 
 ```rust
-pub(crate) fn storage(&self) -> Option<MemoryStorage> {
-    self.storage.borrow().clone()
+use std::cell::RefCell;
+use std::path::PathBuf;
+
+pub(crate) struct SessionMemory {
+    // RefCell 让代码即使只有 &SessionMemory，也能在运行时借用并修改内部值。
+    // Option::None 表示 memory 功能关闭，Some 表示持有一个存储句柄。
+    pub storage: RefCell<Option<MemoryStorage>>,
+
+    // 其余字段省略，例如 flush 配置、计数器和最近一次 flush 内容。
+}
+
+#[derive(Debug, Clone)]
+pub struct MemoryStorage {
+    global_dir: PathBuf,
+    workspace_dir: PathBuf,
+    workspace_path: PathBuf,
+    ephemeral: bool,
+}
+
+impl SessionMemory {
+    /// 判断 memory 是否已启用。
+    pub(crate) fn is_enabled(&self) -> bool {
+        self.storage.borrow().is_some()
+    }
+
+    /// 从 RefCell 中复制出一个拥有的 MemoryStorage。
+    pub(crate) fn storage(&self) -> Option<MemoryStorage> {
+        self.storage.borrow().clone()
+    }
 }
 ```
 
-这里 clone 的是 `Option<MemoryStorage>`，不是延长 `RefCell` 的借用。调用方随后可以 `.await` 或再次借用 storage，不会因旧 guard 仍存活而 panic。
+关键字段不是直接的 `Option<MemoryStorage>`，而是外面包了一层 `RefCell`：
+
+```text
+SessionMemory
+└── storage: RefCell<Option<MemoryStorage>>
+                 └── Some(MemoryStorage) 或 None
+```
+
+`Ref` 就来自这层 `RefCell`。标准库中，`RefCell::borrow()` 的返回类型可以简化理解为：
+
+```rust
+impl<T> RefCell<T> {
+    pub fn borrow(&self) -> Ref<'_, T>;
+}
+```
+
+因此，当 `T = Option<MemoryStorage>` 时：
+
+```rust
+let guard: std::cell::Ref<'_, Option<MemoryStorage>> = self.storage.borrow();
+```
+
+这里的 `Ref<'_, Option<MemoryStorage>>` 就是运行时只读借用的 guard。它的作用类似锁的 guard：创建时把 `RefCell` 的“不可变借用计数”加一，销毁时再减一。只要它还活着，同一个 `RefCell` 就不能成功执行 `borrow_mut()`；违反规则不是编译错误，而是运行时 panic。
+
+仓库里的方法只有一行：
+
+```rust
+impl SessionMemory {
+    pub(crate) fn is_enabled(&self) -> bool {
+        self.storage.borrow().is_some()
+    }
+
+    pub(crate) fn storage(&self) -> Option<MemoryStorage> {
+        self.storage.borrow().clone()
+    }
+}
+```
+
+把这一行按类型展开，等价逻辑更容易看清：
+
+```rust
+use std::cell::Ref;
+
+pub(crate) fn storage(&self) -> Option<MemoryStorage> {
+    let snapshot: Option<MemoryStorage> = {
+        // 第 1 步：运行时不可变借用 RefCell，得到 guard。
+        let guard: Ref<'_, Option<MemoryStorage>> = self.storage.borrow();
+
+        // 第 2 步：Ref<T> 实现 Deref<Target = T>，所以 *guard 得到
+        // Option<MemoryStorage>。这里调用的是 Option 的 Clone，进而克隆
+        // Some 里的 MemoryStorage；不是克隆或延长 guard。
+        (*guard).clone()
+
+        // 第 3 步：离开这个代码块时 guard 被 drop，RefCell 的借用结束。
+    };
+
+    // snapshot 是拥有自己的 PathBuf 数据的 Option<MemoryStorage>，
+    // 已经不再引用 self.storage。
+    snapshot
+}
+```
+
+之所以能克隆内部值，是因为 [`MemoryStorage`](../../crates/codegen/xai-grok-memory/src/storage.rs#L27) 派生了 `Clone`。它的三个 `PathBuf` 字段都会复制出各自拥有的路径数据，`bool` 则直接复制。因此方法返回的 `Option<MemoryStorage>` 是独立的拥有值，其生命周期不再受 `SessionMemory` 或临时 `Ref` 限制。
+
+需要特别区分下面两个类型：
+
+```rust
+Ref<'_, Option<MemoryStorage>> // 借用 guard，仍然绑定 self.storage
+Option<MemoryStorage>          // 拥有值，不再借用 self.storage
+```
+
+如果方法改成直接返回 guard，借用就会被交给调用方：
+
+```rust
+pub(crate) fn storage_ref(&self) -> Ref<'_, Option<MemoryStorage>> {
+    self.storage.borrow()
+}
+
+let held = memory.storage_ref();
+
+// held 仍活着，下面试图取得可变借用会在运行时 panic。
+let mut writable = memory.storage.borrow_mut();
+```
+
+这类 guard 也不适合跨 `.await` 保存：异步函数暂停后，guard 可能比预期存活更久，让其他逻辑无法取得可变借用。当前实现先在一个很短的同步作用域中克隆出拥有值，再释放 guard；调用方拿到 `Option<MemoryStorage>` 后可以安全地 `.await`、再次调用 `borrow()`，或在需要切换 memory 开关时调用 `borrow_mut()`。这就是这里“返回拥有值，而不是把内部借用泄露给调用方”的含义。
+
+### 项目关键代码：把借用输入变成可长期保存的状态
+
+[`ShellState`](../../crates/codegen/xai-grok-tools/src/computer/local/shell_state.rs#L255) 初始化时接收借用的 `&Path`，但结构体保存拥有的值：
+
+```rust
+// 源码节选：ShellState 可以跨 async 调用和进程生命周期保存。
+#[derive(Debug, Clone)]
+pub struct ShellState {
+    // PathBuf 拥有 cwd 的路径数据，不依赖 init() 调用方。
+    pub cwd: PathBuf,
+    // String 拥有可回放的 shell 快照。
+    pub snapshot: String,
+    pub shell: ShellKind,
+}
+
+pub async fn init(shell: ShellKind, cwd: &Path, /* ... */) -> Result<Self, ComputerError> {
+    // cwd 在这里只是借用；构造 Self 时会转换/复制为拥有的数据。
+    // ...
+}
+```
 
 ## 生命周期怎样读
 

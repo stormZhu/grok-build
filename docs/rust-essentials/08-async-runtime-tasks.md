@@ -1,6 +1,6 @@
 # 8. async、任务与 `Send`
 
-`async fn` 不会立即运行：调用它只构造 Future，`.await` 才把控制权交给运行时直到结果就绪。它适合等待 I/O，不会自动让 CPU 密集计算并行。
+调用 `async fn` 只会构造一个 Future，不会立即执行函数体；Future 被运行时 poll，遇到 `.await` 等待 I/O 时才会暂时让出执行权，让其他 task 运行。因此，异步代码适合组织大量 I/O 等待，但 `async`/`.await` 本身不会把 CPU 密集计算拆成并行任务。没有遇到可等待的 `.await` 时，一段长时间的 CPU 计算仍会占住当前 worker；需要并行或隔离这类工作时，应评估 `spawn_blocking`、专用线程或 Rayon 等方案。
 
 ```rust
 let handle = tokio::spawn(async move {
