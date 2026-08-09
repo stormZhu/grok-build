@@ -67,13 +67,13 @@ cargo run --locked \
 | 想解释的旅程 | 先读 | 主要源码 | 最小验证方向 |
 |---|---|---|---|
 | 用户按 Enter 后怎样启动 Turn | [`message-flow`](./deep-dives/message-flow.md)、[`run-session`](./deep-dives/run-session.md) | Pager action → `SessionCommand::Prompt` → `queue_input` → `handle_prompt` | `mini_session_actor` + Session focused test |
-| 模型请求如何流式返回 | [`sampling-lifecycle`](./deep-dives/sampling-lifecycle.md) | `sampler_turn.rs`、`xai-grok-sampler` actor/stream/retry | sampler fixture，断言事件数和终态 |
+| 模型请求如何流式返回 | [`sampling-lifecycle`](./deep-dives/sampling-lifecycle.md) | `sampler_turn.rs`、`xai-grok-sampler` actor/stream/retry | `mini_sampler_retry` + sampler fixture，断言 attempt、事件数和终态 |
 | 一次工具调用怎样执行和写回 | [`tool-call-pipeline`](./deep-dives/tool-call-pipeline.md) | `tool_calls.rs`、`xai-tool-runtime`、ToolBridge | tool runtime integration test |
-| 文件修改如何受权限保护并可恢复 | [`permissions-and-sandbox`](./deep-dives/permissions-and-sandbox.md)、[`workspace-state`](./deep-dives/workspace-state-and-worktree-lifecycle.md) | workspace permission/session/checkpoint | temp workspace fixture |
-| 长会话怎样压缩和恢复 | [上下文管理](./04-context-management.md)、[`persistence-and-replay`](./deep-dives/persistence-and-replay.md) | ChatState、compaction、storage/jsonl | fixture + 恢复后状态断言 |
+| 文件修改如何受权限保护并可恢复 | [`permissions-and-sandbox`](./deep-dives/permissions-and-sandbox.md)、[`workspace-state`](./deep-dives/workspace-state-and-worktree-lifecycle.md) | workspace permission/session/checkpoint | `mini_workspace_rewind` + temp workspace fixture |
+| 长会话怎样压缩和恢复 | [上下文管理](./04-context-management.md)、[`persistence-and-replay`](./deep-dives/persistence-and-replay.md) | ChatState、compaction、storage/jsonl | `mini_context_compaction` + 恢复后状态断言 |
 | Cancel/Shutdown 怎样跨层收尾 | [`cancellation-and-shutdown`](./deep-dives/cancellation-and-shutdown.md) | `run_loop.rs`、Sampler、工具进程、workflow | oneshot/barrier + deadline |
 | UI 为什么显示或漏掉一条更新 | [`pager-rendering`](./deep-dives/pager-rendering.md) | ACP handler、ReplayBuffer、render blocks | reducer/render snapshot test |
-| 配置和模型最终选了哪一份 | [`configuration-and-runtime-resolution`](./deep-dives/configuration-and-runtime-resolution.md)、[`authentication-and-model-resolution`](./deep-dives/authentication-and-model-resolution.md) | ConfigLayers、ModelsManager、SamplerConfig | resolution table test |
+| 配置和模型最终选了哪一份 | [`configuration-and-runtime-resolution`](./deep-dives/configuration-and-runtime-resolution.md)、[`authentication-and-model-resolution`](./deep-dives/authentication-and-model-resolution.md) | ConfigLayers、ModelsManager、SamplerConfig | `mini_config_resolution` + resolution table test |
 
 第二遍不要记录“这个函数很复杂”。每一步只记录四件事：输入值、owner、边界类型、失败出口。
 
@@ -111,6 +111,10 @@ cargo run --locked \
 | [`mini_tool_pipeline`](./rust-essentials/labs/async-demos/src/bin/mini_tool_pipeline.rs) | [`tool-call-pipeline`](./deep-dives/tool-call-pipeline.md) | JSON/强类型边界、权限、`Progress* -> Terminal` |
 | [`mini_replay_order`](./rust-essentials/labs/async-demos/src/bin/mini_replay_order.rs) | [`persistence-and-replay`](./deep-dives/persistence-and-replay.md) | chunk 合并、非流式事件和 completion 前 flush |
 | [`mini_cancel_shutdown`](./rust-essentials/labs/async-demos/src/bin/mini_cancel_shutdown.rs) | [`cancellation-and-shutdown`](./deep-dives/cancellation-and-shutdown.md) | Cancel 结束 Turn；Shutdown 收回 Session 资源 |
+| [`mini_sampler_retry`](./rust-essentials/labs/async-demos/src/bin/mini_sampler_retry.rs) | [`sampling-lifecycle`](./deep-dives/sampling-lifecycle.md) | 一请求多 attempt、输出后 retry veto、Session 恢复边界 |
+| [`mini_context_compaction`](./rust-essentials/labs/async-demos/src/bin/mini_context_compaction.rs) | [上下文管理](./04-context-management.md) | request-only pruning 与权威 history full-replace |
+| [`mini_workspace_rewind`](./rust-essentials/labs/async-demos/src/bin/mini_workspace_rewind.rs) | [`workspace-state`](./deep-dives/workspace-state-and-worktree-lifecycle.md) | 修改前权限、before/after、冲突和 checkpoint truncate |
+| [`mini_config_resolution`](./rust-essentials/labs/async-demos/src/bin/mini_config_resolution.rs) | [`configuration-and-runtime-resolution`](./deep-dives/configuration-and-runtime-resolution.md) | 深度合并、来源优先级与 Session snapshot |
 
 这些程序只保留主干契约。每次运行后必须写出“生产代码多了哪些 owner、错误和持久化边界”，否则缩小模型会反过来遮蔽真实复杂度。
 

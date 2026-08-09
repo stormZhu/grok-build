@@ -377,6 +377,16 @@ rg -n "should_compact_on_error|CompactAndResubmit|run_compact_only|is_retry_veto
 
 建议从最小 owner 的测试开始：
 
+先运行 [`mini_sampler_retry.rs`](../rust-essentials/labs/async-demos/src/bin/mini_sampler_retry.rs)，闭卷预测四种路径的 attempt 数和最终 owner：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_sampler_retry
+```
+
+程序用暂停的 Tokio 时钟验证“无输出 transient failure 可重试、输出后失败不重试、空响应进入 retry policy、auth/context error 返回 Session”。它没有模拟真实 HTTP/SSE、header 或 cancellation；这些仍需下面的 production fixture 覆盖。
+
 | 变更 | 优先阅读/验证 |
 | --- | --- |
 | 后端 chunk 到统一事件 | `xai-grok-sampler/src/stream/*` 内的 unit tests |

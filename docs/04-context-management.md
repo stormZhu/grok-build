@@ -172,6 +172,16 @@ Shell 实现这些 trait，把「产品状态」接到「纯算法」。
 
 两者叠加：compact 前可能已 prune；compact 后 conversation 变短，prune 压力下降。
 
+先运行 [`mini_context_compaction.rs`](./rust-essentials/labs/async-demos/src/bin/mini_context_compaction.rs)，再回到 ChatState 和 compaction crate 对照 owner：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_context_compaction
+```
+
+程序断言 request pruning 不修改权威 conversation，full-replace 会保留 System、摘要、原始用户目标和 reminder 并降低估算 token；它还展示相同 usage 在模型窗口缩小时越过 85% 阈值。这里的字符估算和手写摘要只是确定性替身，生产行为仍由 token estimator、compaction sampler 和完整性修复共同决定。
+
 ---
 
 ## 5. Memory 系统

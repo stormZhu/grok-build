@@ -312,6 +312,9 @@ JSON args -> Args -> Tool::execute -> Progress* -> Terminal -> ToolRunResult
 ### 操作
 
 ```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_sampler_retry
 cargo test -p xai-grok-sampler
 cargo test -p xai-grok-sampler -- --list | rg -i 'stream|retry|error|doom'
 rg -n "Stream|retry|doom|CancellationToken|usage" \
@@ -358,6 +361,9 @@ ConversationRequest
 ### 操作
 
 ```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_context_compaction
 cargo test -p xai-chat-state
 cargo test -p xai-grok-compaction
 cargo test -p xai-token-estimation
@@ -498,6 +504,8 @@ Pager queue -> ACP Prompt -> SessionActor admission
 ## 11. 继续深入的分流
 
 完成实验 0–10 后按兴趣选择：
+
+进入 Workspace 或配置源码前，分别运行 [`mini_workspace_rewind`](./rust-essentials/labs/async-demos/src/bin/mini_workspace_rewind.rs) 和 [`mini_config_resolution`](./rust-essentials/labs/async-demos/src/bin/mini_config_resolution.rs)。先写下权限/快照或来源/优先级的预测，再用下面的专题解释生产实现多出的路径、策略和持久化边界。
 
 | 方向 | 下一篇/下一组源码 |
 |---|---|

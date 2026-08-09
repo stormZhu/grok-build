@@ -48,6 +48,10 @@ cargo run --locked \
 | [`mini_tool_pipeline`](./async-demos/src/bin/mini_tool_pipeline.rs) | JSON 参数在哪一层变回强类型？拒绝、缺 Terminal 和成功分别怎样呈现？ | prepare、权限、`Progress* -> Terminal`、UI/prompt 两份输出和 ChatState tool result |
 | [`mini_replay_order`](./async-demos/src/bin/mini_replay_order.rs) | 两个文本 chunk、一个 tool event、尾部文本和 TurnCompleted 以什么顺序到客户端？ | 流式 chunk 合并、非流式事件强制 flush、completion 前 flush 尾部文本 |
 | [`mini_cancel_shutdown`](./async-demos/src/bin/mini_cancel_shutdown.rs) | Cancel 后 Session 能否运行下一 Turn？Shutdown ack 前哪些 cleanup 必须完成？ | Turn 取消、RAII cleanup、Session 继续存活，以及 shutdown 对后台 workflow 的 join/flush 所有权 |
+| [`mini_sampler_retry`](./async-demos/src/bin/mini_sampler_retry.rs) | 无输出失败、半截输出、空响应和 401/context error 各会尝试几次？ | logical request/attempt 分离、只在输出前 retry、空响应分类，以及 Session 级恢复边界 |
+| [`mini_context_compaction`](./async-demos/src/bin/mini_context_compaction.rs) | pruning 后权威 history 是否变化？窗口缩小会不会触发 compact？ | request clone 与 ChatState、85% 阈值、full-replace 后的摘要/原目标/reminder |
+| [`mini_workspace_rewind`](./async-demos/src/bin/mini_workspace_rewind.rs) | 同轮两次写入保留哪个 before？外部修改或恢复写失败后 checkpoint 怎样变化？ | 修改前权限、before/after snapshot、冲突仍写回，以及成功后才 truncate |
+| [`mini_config_resolution`](./async-demos/src/bin/mini_config_resolution.rs) | nested object、数组、类型冲突怎样 merge？刷新后旧 Session 会变吗？ | 深度合并、带 `ConfigSource` 的优先级、requirement pin 和 Session snapshot |
 | [`spawn_local_rc`](./async-demos/src/bin/spawn_local_rc.rs) | `Rc<RefCell<_>>` 为什么不能交给普通 `spawn`，这里却能共享？ | current-thread runtime 仍需 `LocalSet`；不依赖两个 task 的偶然调度顺序 |
 | [`timer_reset`](./async-demos/src/bin/timer_reset.rs) | 一个 `Sleep` 完成后怎样再次等待新 deadline？ | 循环外创建、`tokio::pin!`、`.as_mut()` 重借用和 `reset()` |
 | [`mutex_snapshot`](./async-demos/src/bin/mutex_snapshot.rs) | reader 停在第二个 `.await` 时，另一个 task 能否立刻取锁？ | 在小作用域内复制 owned snapshot，让 `MutexGuard` 在 await 前释放 |
@@ -56,7 +60,7 @@ cargo run --locked \
 
 ## 一键校验
 
-下面的命令会运行全部正常 Katas、确认六个反例按预期编译失败，并逐个运行十二个 async demos：
+下面的命令会运行全部正常 Katas、确认六个反例按预期编译失败，并逐个运行十六个 async demos：
 
 ```sh
 docs/rust-essentials/labs/check.sh

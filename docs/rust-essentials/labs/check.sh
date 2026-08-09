@@ -43,6 +43,10 @@ async_demos=(
     mini_tool_pipeline
     mini_replay_order
     mini_cancel_shutdown
+    mini_sampler_retry
+    mini_context_compaction
+    mini_workspace_rewind
+    mini_config_resolution
     spawn_local_rc
     timer_reset
     mutex_snapshot

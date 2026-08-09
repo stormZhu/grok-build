@@ -154,6 +154,16 @@ points[prompt_index >= target]
 
 冲突不会自动阻止写回：当前实现将冲突记录到 response，同时仍尝试恢复目标内容；真正的失败条件是文件读写错误。贡献者修改这个行为时要先确认 ACP/UI 对 `conflicts` 的呈现契约，否则“更安全”的修改可能让用户失去可见冲突信息。
 
+用 [`mini_workspace_rewind.rs`](../rust-essentials/labs/async-demos/src/bin/mini_workspace_rewind.rs) 先观察这组容易混淆的状态转换：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_workspace_rewind
+```
+
+内存 workspace 会断言权限拒绝发生在状态变化前、同轮同文件只保留最早 before、外部修改被报告但仍恢复 before，以及写回失败时 checkpoint 不 truncate。它不覆盖真实路径规范化、symlink、Git/hunk domain 或 proxy RPC；这些应留给本篇第 12 节的 focused fixtures。
+
 `ConversationOnly` rewind 是另一个语义：它只退 conversation，不恢复文件。因此 tracker 会把被丢弃 prompt 的 file effects 合并到最后一个仍存活的 rewind point，保证未来的“文件 rewind”仍能撤销那些修改。不能简单删除 `target` 之后的快照。
 
 ## 6. Checkpoint 是多个 domain 的联合记录

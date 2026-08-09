@@ -126,6 +126,16 @@ pub fn deep_merge_toml(base: &mut toml::Value, overrides: &toml::Value) {
 
 因此数组型配置（例如某些 models、hooks 或 campaigns）不能靠“多个层拼接”来实现 additive 语义。若需要“各层都保留”，通常要看专用的 `hook_config_layers` 或 campaign merge，而不是修改 `deep_merge_toml`。
 
+运行 [`mini_config_resolution.rs`](../rust-essentials/labs/async-demos/src/bin/mini_config_resolution.rs) 可以把 merge、runtime priority 和 Session snapshot 放在同一次实验中：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_config_resolution
+```
+
+程序断言 object 递归合并、数组和异类型整体替换、requirement pin 覆盖普通来源、`Resolved<T>` 保留 `ConfigSource`，以及全局刷新只影响之后创建的 Session。它用 JSON 模拟 TOML 的结构合并，不覆盖环境变量展开、MDM/fail-closed、campaign 或模型目录；这些仍需对应生产 owner 的测试。
+
 ### 2.3 环境变量展开发生在什么位置
 
 普通 `load_toml_file` 先解析 TOML，再递归调用 `expand_env_vars_in_toml`，支持 `$VAR` 和 `${VAR}`。因此：
