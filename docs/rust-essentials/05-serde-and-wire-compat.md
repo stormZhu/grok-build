@@ -32,6 +32,8 @@ struct Config {
 [`GoalStatus`](../../crates/codegen/xai-grok-shell/src/session/goal_tracker.rs#L62) 新写入使用 snake_case，仍接收历史名称：
 
 ```rust
+// 源码节选：新写入统一为 snake_case，同时仍接受旧版本的 PascalCase。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GoalStatus {
     #[serde(alias = "Active")]
@@ -41,7 +43,32 @@ pub enum GoalStatus {
 }
 ```
 
-其自定义反序列化把未知状态恢复为可暂停状态而不是 `Active`。这体现了协议演进时的安全决策，而非单纯的 Serde 技巧。
+其自定义反序列化将 wire 字符串交给 `from_wire_str`：
+
+```rust
+// 源码节选：未知值不会让恢复后的目标自动继续执行。
+let s = String::deserialize(deserializer)?;
+Ok(Self::from_wire_str(&s))
+// from_wire_str 的兜底分支：_ => Self::UserPaused
+```
+
+这体现了协议演进时的安全决策，而非单纯的 Serde 技巧。
+
+### 项目关键代码：配置解析后的敏感信息保护
+
+[`load_toml_file`](../../crates/codegen/xai-grok-config/src/loader.rs#L38) 和同文件的错误格式化分开处理加载与安全日志：
+
+```rust
+pub fn load_toml_file(path: &Path) -> std::io::Result<toml::Value> {
+    let mut v = read_toml_file(path)?;
+    // 只在成功解析后展开环境变量，避免把原始敏感配置散播到错误文本。
+    expand_env_vars_in_toml(&mut v);
+    Ok(v)
+}
+
+// 解析错误只保留行、列和消息；不回显可能含密钥的原始 TOML 行。
+pub fn toml_error_detail(src: &str, e: &toml::de::Error) -> String { /* ... */ }
+```
 
 ## 常见属性
 

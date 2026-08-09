@@ -28,11 +28,38 @@ send(snapshot).await;
 [`SessionMemory`](../../crates/codegen/xai-grok-shell/src/session/memory_state.rs#L34) 把两类状态明确分开：
 
 ```rust
+// 源码节选：SessionActor 是 LocalSet 单线程，因此 RefCell 合法。
+// 它保存需要从 &self 修改的局部内容，不能被跨线程 task 共享。
 pub last_flush_content: RefCell<Option<String>>,
+
+// AtomicBool 只表示一个独立的开关；它不保护 last_flush_content。
 pub is_flushing: AtomicBool,
 ```
 
 前者只在单线程 Actor 内借用，后者只表达独立的“是否正在 flush”标志。不要据此推断多个字段具有原子一致性；跨字段不变量仍应由 Actor 顺序或更高层同步维护。
+
+### 项目关键代码：原子 compare-and-set 充当轻量门闩
+
+[`SessionMemory::try_acquire_flush_lock`](../../crates/codegen/xai-grok-shell/src/session/memory_state.rs#L71) 用一个 AtomicBool 防止同一会话并发 flush：
+
+```rust
+pub(crate) fn try_acquire_flush_lock(&self) -> bool {
+    self.is_flushing
+        .compare_exchange(
+            false, // 只有尚未 flush 时才能取得门闩。
+            true,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        )
+        .is_ok()
+}
+
+pub(crate) fn release_flush_lock(&self) {
+    self.is_flushing.store(false, Ordering::Relaxed);
+}
+```
+
+它只保护“是否已有 flush 在运行”这个单值不变量；实际 memory 内容仍由 SessionActor 的顺序控制，不能把这段代码当作通用互斥锁替代品。
 
 ## 必须避免
 

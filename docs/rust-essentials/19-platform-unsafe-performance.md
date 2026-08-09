@@ -23,14 +23,49 @@ Rust 2024 中修改进程环境变量也要求 `unsafe`，因为它与其他线�
 `macos_managed.rs` 从 CoreFoundation 取得 `Copy` 规则返回的 +1 引用后，立即交给拥有型包装：
 
 ```rust
+// 源码节选：CoreFoundation 的 Copy 规则返回 +1 引用，
+// 因此随后必须由某个拥有者负责 release。
 let value_ref = unsafe {
     CFPreferencesCopyAppValue(key, application_id)
 };
-if value_ref.is_null() { return None; }
+
+// 先检查空指针；把空指针包装为 CFType 会违反封装前提。
+if value_ref.is_null() {
+    return None;
+}
+
+// wrap_under_create_rule 接管这一个 +1 引用的释放责任。
 let value = unsafe { CFType::wrap_under_create_rule(value_ref) };
 ```
 
 此处的安全前提是 API 的 Copy 规则确实给调用者一个待释放的引用；`CFType` 接管释放责任。随后先 downcast 为 `CFString`，避免把非字符串按字符串 API 读取而产生未定义行为。
+
+### 项目关键代码：平台差异封装在安全返回类型之后
+
+[`os_pipe`](../../crates/codegen/xai-grok-tools/src/computer/local/shell_state.rs#L566) 对外返回 `OwnedFd`，调用者无需管理裸文件描述符关闭：
+
+```rust
+fn os_pipe() -> std::io::Result<(OwnedFd, OwnedFd)> {
+    #[cfg(target_os = "linux")]
+    {
+        // Linux 用 pipe2 原子设置 O_CLOEXEC，避免 fork 继承 fd。
+        nix::unistd::pipe2(nix::fcntl::OFlag::O_CLOEXEC)
+            .map_err(|e| std::io::Error::from_raw_os_error(e as i32))
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let (read_fd, write_fd) = nix::unistd::pipe()
+            .map_err(|e| std::io::Error::from_raw_os_error(e as i32))?;
+        // macOS 没有可用 pipe2 封装，退化为分别设置 close-on-exec。
+        let _ = set_cloexec(&read_fd);
+        let _ = set_cloexec(&write_fd);
+        Ok((read_fd, write_fd))
+    }
+}
+```
+
+`OwnedFd` 让资源在离开作用域时关闭；`unsafe` 被限制在 `set_cloexec` 的 FFI 调用内，绝大多数上层逻辑不需要接触 raw fd。
 
 ## 性能方法
 

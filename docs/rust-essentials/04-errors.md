@@ -30,13 +30,42 @@ fn read_config(path: &std::path::Path) -> anyhow::Result<String> {
 [`LocalTerminalBackend::run`](../../crates/codegen/xai-grok-tools/src/computer/local/terminal.rs#L2452) 把两类通道错误转成不同上下文：
 
 ```rust
-self.cmd_tx.send(command).await
+// 源码节选。先把命令投递给唯一拥有终端状态的 Actor。
+self.cmd_tx
+    .send(TerminalCommand::Run {
+        request,
+        reply: reply_tx, // 回复端随命令一起移交给 Actor。
+    })
+    .await
     .map_err(|_| ComputerError::io("terminal actor shut down"))?;
+
+// 再等待该请求专属的回复；此处失败表示 Actor 已接收但未能答复。
 reply_rx.await
     .map_err(|_| ComputerError::io("terminal actor dropped reply channel"))?
 ```
 
 前者表示无法投递命令，后者表示命令已投递但 Actor 未回复。调用者排障和重试策略可能不同，所以不能合并成笼统的 “channel error”。
+
+### 项目关键代码：保留可恢复的 I/O 分类
+
+[`ComputerError`](../../crates/codegen/xai-grok-tools/src/computer/types.rs#L14) 除了可读消息，还保留可供策略层判断的 `ErrorKind`：
+
+```rust
+#[derive(thiserror::Error, Debug, Clone)]
+pub enum ComputerError {
+    #[error("IO Error: {0}")]
+    IOError(String, Option<std::io::ErrorKind>),
+    #[error("UnQuoted command")]
+    CommandNotQuoted,
+}
+
+impl From<std::io::Error> for ComputerError {
+    fn from(err: std::io::Error) -> Self {
+        // 文本用于诊断，kind 用于调用方判断 NotFound、PermissionDenied 等。
+        Self::IOError(err.to_string(), Some(err.kind()))
+    }
+}
+```
 
 ## 恢复策略
 

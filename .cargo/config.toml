@@ -1,6 +1,11 @@
 # link-arg
 # https://pyo3.rs/v0.17.1/building_and_distribution.html#macos
 
+[build]
+# Cargo resolves this relative to the workspace root. Commands run from this
+# repository therefore reuse the workspace-root target directory automatically.
+target-dir = "target"
+
 # force-unwind-tables
 # https://github.com/rust-lang/backtrace-rs/issues/397
 

@@ -29,15 +29,47 @@ async fn stops_when_cancelled() { /* I/O、channel 或 task */ }
 [`MockFs`](../../crates/codegen/xai-grok-tools/src/computer/local/mock_fs.rs#L12) 不接触真实磁盘：
 
 ```rust
+// 源码节选：mock 的状态完全在内存中，测试无需写入真实工作区。
 pub struct MockFs {
     files: Arc<RwLock<HashMap<PathBuf, Vec<u8>>>>,
 }
 
 #[async_trait::async_trait]
-impl AsyncFileSystem for MockFs { /* read/write/delete */ }
+impl AsyncFileSystem for MockFs {
+    async fn read_file(&self, path: &Path) -> Result<Vec<u8>, ComputerError> {
+        // read().await 只在取得锁时等待；cloned() 让返回值脱离锁 guard。
+        self.files.read().await.get(path).cloned().ok_or_else(|| {
+            ComputerError::IOError(
+                format!("File not found: {}", path.display()),
+                Some(std::io::ErrorKind::NotFound),
+            )
+        })
+    }
+}
 ```
 
 它与生产实现共享 `AsyncFileSystem`，所以调用方测试能验证读写失败和状态变化，而不会依赖工作目录、权限或机器速度。
+
+### 项目关键代码：测试也要拥有后台 Actor 的生命周期
+
+[`ActorGuard`](../../crates/codegen/xai-grok-shell/src/session/persistence_tests.rs#L4) 用 RAII 式包装避免测试遗留 task：
+
+```rust
+struct ActorGuard {
+    handle: PersistenceHandle,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl ActorGuard {
+    async fn stop(self) {
+        // 先请求停止，再 await，确保测试结束前 task 不再运行。
+        self.task.abort();
+        let _ = self.task.await;
+    }
+}
+```
+
+写 async 测试时，不能只断言结果；还要明确后台任务由谁停止，否则后续测试可能继承它的状态或日志。
 
 ## 异步测试检查表
 

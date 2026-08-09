@@ -35,11 +35,56 @@ Stream 是按时间产生多个值的异步序列。使用 `StreamExt::next()` �
 终端后端创建有界命令队列和取消 token：
 
 ```rust
+// 源码节选：每次调用 run 都创建独立的回复通道。
+let (reply_tx, reply_rx) = oneshot::channel();
+
+self.cmd_tx
+    .send(TerminalCommand::Run {
+        request,
+        reply: reply_tx, // Actor 处理完此命令后只能回复这一位调用者。
+    })
+    .await
+    .map_err(|_| ComputerError::io("terminal actor shut down"))?;
+
+// mpsc 负责排队；oneshot 负责这一次请求的结果。
+reply_rx
+    .await
+    .map_err(|_| ComputerError::io("terminal actor dropped reply channel"))?
+```
+
+终端后端创建有界命令队列和取消 token：
+
+```rust
+// 源码节选：容量是背压策略，取消信号可由 backend 的 cancel() 广播给 Actor。
 let (cmd_tx, cmd_rx) = mpsc::channel(COMMAND_CHANNEL_SIZE);
 let cancel_token = CancellationToken::new();
 ```
 
-每次 `run` 再创建专属 `oneshot`，将其随 `TerminalCommand::Run` 发送。这样队列只负责命令顺序，回复不会被别的请求取走；容量 `COMMAND_CHANNEL_SIZE` 则是背压策略的一部分。
+每次 `run` 创建专属 `oneshot`，将其随 `TerminalCommand::Run` 发送。这样队列只负责命令顺序，回复不会被别的请求取走；容量 `COMMAND_CHANNEL_SIZE` 则是背压策略的一部分。
+
+### 项目关键代码：前台与后台命令共用 Actor 边界
+
+[`TerminalBackend`](../../crates/codegen/xai-grok-tools/src/computer/local/terminal.rs#L2450) 的后台启动流程复用同一套 mpsc/oneshot 约定，只是返回类型不同：
+
+```rust
+async fn run_background(&self, request: TerminalRunRequest)
+    -> Result<BackgroundHandle, ComputerError>
+{
+    let (reply_tx, reply_rx) = oneshot::channel();
+    self.cmd_tx
+        .send(TerminalCommand::RunBackground {
+            request,
+            reply: reply_tx, // 后台任务 ID 从该回复返回。
+        })
+        .await
+        .map_err(|_| ComputerError::io("terminal actor shut down"))?;
+
+    reply_rx.await
+        .map_err(|_| ComputerError::io("terminal actor dropped reply channel"))?
+}
+```
+
+调用者不直接操作子进程；无论前台或后台，所有终端状态变化都通过 Actor 串行化。
 
 ## 阅读检查点
 

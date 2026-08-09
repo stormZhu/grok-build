@@ -92,6 +92,11 @@ The user guide ships with the pager crate:
 — getting started, keyboard shortcuts, slash commands, configuration, theming,
 MCP servers, skills, plugins, hooks, headless mode, sandboxing, and more.
 
+For a Chinese, source-oriented guide to this Rust workspace and its agent
+runtime, see [`docs/`](docs/README.md). It covers architecture, the agent loop,
+context management, prompt assembly, interfaces, Rust essentials, complete
+message flow, and a practical developer workflow.
+
 ## Repository layout
 
 | Path | Contents |

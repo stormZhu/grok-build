@@ -23,8 +23,10 @@ tokio::task::spawn_local(async { /* ... */ });
 来自 [`build_session_runtime`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/spawn.rs#L44)：
 
 ```rust
+// 源码节选：每个 session 使用 current_thread runtime，
+// 所以 SessionActor 内的 RefCell/Rc 不需要满足 Send。
 pub(crate) fn build_session_runtime() -> std::io::Result<tokio::runtime::Runtime> {
-    tokio::runtime::Builder::new_current_thread()  // 单线程运行时
+    tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
 }
@@ -37,13 +39,16 @@ pub(crate) fn build_session_runtime() -> std::io::Result<tokio::runtime::Runtime
 `spawn_local` 仍要求任务在有效的 `LocalSet` 或 local runtime 上运行；从普通 `tokio::spawn` task 中随意调用会 panic。它也不让借用局部变量跨 task 存活：task 往往仍需要 `move` 捕获拥有值或 `Rc`/`Arc`。单线程只消除了跨线程共享，不消除重入、取消和跨 `.await` 的状态一致性问题。
 
 ```rust
-// 在 select! 分支中 spawn 后台任务，不阻塞事件循环
+// 源码节选：clone Arc 后 move 进 task；不借用当前 select! 分支的局部变量。
 tokio::task::spawn_local({
     let session = session.clone();
     async move {
+        // 后台 flush 失败只记录，主循环继续处理其他事件。
         if !session.run_memory_flush("interval", None).await {
             tracing::info!("MEMORY_IDLE_FLUSH: skipped");
         }
     }
 });
 ```
+
+这个片段出自 [`run_loop.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs#L324)。`session.clone()` 是 `Arc` 引用计数增加，不会复制整个会话；`async move` 则让 task 拥有这个 `Arc`，满足 task 不借用当前事件循环栈帧的要求。

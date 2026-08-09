@@ -29,14 +29,36 @@ impl Drop for Restore<'_> {
 - [`PlanGuard::drop`](../../crates/codegen/xai-grok-shell/src/session/goal_strategist.rs#L536) 展示作用域清理。
 - [`Restore::drop`](../../crates/codegen/xai-grok-config/src/signed_policy.rs#L113) 的测试辅助 guard 展示状态恢复。
 
+### 项目关键代码：宏生成 trait 实现
+
+[`register_resource!`](../../crates/codegen/xai-grok-tools/src/types/resources.rs#L60) 不是运行时注册，而是在编译时为某个类型补齐实现：
+
+```rust
+// 源码节选：调用 register_resource!("ns", "name", MyType) 后，
+// 编译器看到的核心结果是下列 impl。
+macro_rules! register_resource {
+    ($namespace:literal, $name:literal, $ty:ty) => {
+        impl $crate::types::resources::ResourceType for $ty {
+            // concat! 在编译期拼接静态资源 ID，无运行时字符串分配。
+            const ID: &'static str = concat!($namespace, ".", $name);
+        }
+    };
+}
+```
+
+阅读宏调用时，应先把它展开为这个 `impl`，再检查被实现类型是否满足 `ResourceType` 的其余约束。
+
 ### 仓库代码摘录：取消时仍恢复计划文件
 
 [`PlanGuard::drop`](../../crates/codegen/xai-grok-shell/src/session/goal_strategist.rs#L536) 的析构实现负责兜底：
 
 ```rust
+// 源码节选：Drop 是取消与提前返回时的最后一道同步恢复保障。
 impl Drop for PlanGuard<'_> {
     fn drop(&mut self) {
+        // restore 已成功执行过时返回 None，避免重复恢复。
         if let Some(reason) = self.restore() {
+            // Drop 不能 await，因此这里只做同步恢复和错误记录。
             tracing::error!(reason = reason.as_const_str(), "plan restore failed");
         }
     }
@@ -44,6 +66,29 @@ impl Drop for PlanGuard<'_> {
 ```
 
 future 在 `.await` 间被取消也会 drop 局部值，因此该 guard 把“计划文件必须恢复”的不变量放进所有提前退出路径。`Drop` 中只做同步恢复和记录，不尝试 async I/O。
+
+### 项目关键代码：测试中的线程局部状态也由 guard 恢复
+
+[`with_dark`](../../crates/codegen/xai-grok-config/src/signed_policy.rs#L109) 在闭包退出时恢复此前的 override：
+
+```rust
+LOCAL_OVERRIDE.with(|cell| {
+    let prev = cell.replace(Some(Some(Vec::new())));
+
+    struct Restore(Option<KeyOverride>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let prev = self.0.take();
+            LOCAL_OVERRIDE.with(|cell| *cell.borrow_mut() = prev);
+        }
+    }
+
+    let _restore = Restore(prev); // 即使 f() panic 或提前返回也会恢复。
+    f()
+})
+```
+
+这类局部 guard 比在每个分支手写“恢复旧值”可靠，尤其适合测试和临时环境覆盖。
 
 ## 阅读检查点
 

@@ -27,6 +27,17 @@ let value = handle.await??; // JoinError，再是 fetch 自身的 Result
 [`LocalTerminalBackend::new_with_ttl`](../../crates/codegen/xai-grok-tools/src/computer/local/terminal.rs#L2383) 根据调用环境选择 task：
 
 ```rust
+// 源码节选：Actor 的命令队列和取消令牌在创建时一起建立。
+let (cmd_tx, cmd_rx) = mpsc::channel(COMMAND_CHANNEL_SIZE);
+let cancel_token = CancellationToken::new();
+
+// actor_fut 独占 cmd_rx，并在内部调用 actor.run().await。
+let actor_fut = async move {
+    let actor = LocalTerminalActor::new(cmd_rx, cancel_token_clone, /* ... */);
+    actor.run().await;
+};
+
+// 根据调用模式选择调度边界；不是为了“更快”而任意切换。
 if use_spawn_local {
     tokio::task::spawn_local(actor_fut);
 } else {
@@ -35,6 +46,27 @@ if use_spawn_local {
 ```
 
 这不是可随意互换的写法：前者允许 LocalSet 中的 `!Send` 状态，后者使 Actor 可在线程池调度。阅读配置来源后再决定新增状态能否跨线程。
+
+### 项目关键代码：有上限地等待并发任务
+
+[`search_bootstrap.rs`](../../crates/codegen/xai-grok-shell/src/session/storage/search_bootstrap.rs#L480) 没有为每个 session 无限制创建 I/O：
+
+```rust
+// 源码节选：Semaphore 限制同时运行的 bootstrap 数量。
+let semaphore = Arc::new(Semaphore::new(BOOTSTRAP_MAX_CONCURRENT.max(1)));
+let mut join_set = tokio::task::JoinSet::new();
+
+for (summary, updates_path) in sessions {
+    let semaphore = semaphore.clone();
+    join_set.spawn(async move {
+        // permit 在 future 返回时 drop，自动把名额还给下一项。
+        let _permit = semaphore.acquire().await.expect("semaphore is never closed");
+        // ... 读取、索引这一条 session
+    });
+}
+```
+
+`JoinSet` 管理任务集合，`Semaphore` 定义并发上限；两者缺一不可：前者解决回收和结果，后者保护磁盘、数据库和运行时。
 
 ## 阻塞工作
 

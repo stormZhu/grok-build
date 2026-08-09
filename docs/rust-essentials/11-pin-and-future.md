@@ -65,7 +65,7 @@ tokio::select! {
 定时器到期后，不需要拆了重装一颗炸弹——直接**重新设定倒计时**就行：
 
 ```rust
-// 重置定时器，等待下一轮
+// 源码节选自 run_loop.rs：as_mut() 保留 Pin，reset() 仅修改 deadline。
 if let Some(timeout) = session.idle_flush_timeout {
     idle_flush_sleep.as_mut().reset(tokio::time::Instant::now() + timeout);
 }
@@ -86,11 +86,30 @@ if let Some(timeout) = session.idle_flush_timeout {
 项目里有个巧妙用法：功能没开启时，设一个**永不到期**的定时器，配合 `select!` 的 `if` 守卫，零开销跳过：
 
 ```rust
+// 源码节选：变量在 loop 外创建，随后被 pin，因此 select! 每轮等待同一个 Sleep。
 let idle_flush_sleep = match session.idle_flush_timeout {
     Some(timeout) => tokio::time::sleep(timeout),
-    None => tokio::time::sleep(std::time::Duration::MAX),  // ≈ 2.8 亿年，永不到期
+    None => tokio::time::sleep(std::time::Duration::MAX), // 禁用时不触发
 };
 tokio::pin!(idle_flush_sleep);
 ```
 
 > 把定时器设成 2.8 亿年后到期，反正等不到，就当它不存在。`if` 守卫再补一刀——条件不满足时根本不 poll，双重保险。
+
+### 项目关键代码：同一个 pinned 定时器在事件循环中重用
+
+[`run_loop.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs#L298) 先创建并 pin，再在 `select!` 分支内 reset：
+
+```rust
+let idle_flush_sleep = match session.idle_flush_timeout {
+    Some(timeout) => tokio::time::sleep(timeout),
+    None => tokio::time::sleep(std::time::Duration::MAX),
+};
+tokio::pin!(idle_flush_sleep); // 此后只能通过 Pin<&mut Sleep> poll/reset。
+
+// ... select! 的 idle 分支内：
+if let Some(timeout) = session.idle_flush_timeout {
+    // 不重建 Future，因此不存在把已经被 poll 的 Sleep 移走的问题。
+    idle_flush_sleep.as_mut().reset(tokio::time::Instant::now() + timeout);
+}
+```

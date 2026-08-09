@@ -28,14 +28,41 @@ fn load_dyn(store: &dyn Store, key: &str) -> Option<String> { store.get(key) }
 [`AsyncFileSystem`](../../crates/codegen/xai-grok-tools/src/computer/types.rs#L52) 明确了工具层对文件系统的最小要求：
 
 ```rust
+// 源码节选。async_trait 负责把 async 方法转换为 trait 可表达的 Future。
 #[async_trait::async_trait]
 pub trait AsyncFileSystem: Send + Sync {
+    // &Path 是借用输入：调用者保有路径；返回 Vec 则转移读取到的字节所有权。
     async fn read_file(&self, path: &Path) -> Result<Vec<u8>, ComputerError>;
+
+    // &[u8] 避免调用方为了写入而复制数据；实现决定何时写入完成。
     async fn write_file(&self, path: &Path, data: &[u8]) -> Result<(), ComputerError>;
+
+    async fn delete_file(&self, path: &Path) -> Result<(), ComputerError>;
 }
 ```
 
 `Send + Sync` 不是装饰：该接口会被放进 `Arc<dyn AsyncFileSystem>`，因此真实实现和 mock 都必须能满足并发调用边界。
+
+### 项目关键代码：运行时可替换的工具客户端
+
+[`ManagedGatewayToolClient`](../../crates/codegen/xai-grok-tools/src/types/resources.rs#L568) 将 trait object 放入 `Arc`：
+
+```rust
+#[async_trait::async_trait]
+pub trait ManagedGatewayToolCaller: Send + Sync {
+    async fn call_tool(
+        &self,
+        call_id: &str,
+        arguments: serde_json::Value,
+        caller: &str,
+    ) -> Result<ManagedGatewayToolCallResponse, xai_tool_runtime::ToolError>;
+}
+
+// Arc 使同一个具体实现可被多个资源持有；dyn 允许在运行时注入不同后端。
+pub struct ManagedGatewayToolClient(pub Arc<dyn ManagedGatewayToolCaller>);
+```
+
+调用方只依赖 `call_tool` 契约；生产实现、远端网关和测试替身不必出现在同一个泛型实例化中。
 
 ## `Send` 和 `Sync`
 

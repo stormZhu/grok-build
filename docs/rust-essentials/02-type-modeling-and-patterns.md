@@ -35,11 +35,18 @@ fn message(reply: Reply) -> String {
 [`ChatStateCommand`](../../crates/codegen/xai-chat-state/src/commands.rs#L56) 让不同变体携带不同的数据和确认语义：
 
 ```rust
-PushUserMessage { item: ConversationItem },
-PushUserMessageAndAck {
-    item: ConversationItem,
-    reply: oneshot::Sender<()>,
-},
+// 源码节选；每个变体就是一种合法的 Actor 消息形状。
+pub enum ChatStateCommand {
+    // 不需要调用方等待结果的消息：fire-and-forget。
+    PushUserMessage { item: ConversationItem },
+
+    // 需要确认的消息：reply 是该变体的必填字段，
+    // 因而构造值时无法漏掉一次性回复通道。
+    PushUserMessageAndAck {
+        item: ConversationItem,
+        reply: oneshot::Sender<()>,
+    },
+}
 ```
 
 这比 `kind + Option<reply>` 更可靠：发送者无法构造“要求确认却没有回复通道”的非法组合。

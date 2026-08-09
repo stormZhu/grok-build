@@ -26,17 +26,38 @@ cargo fmt --all -- --check
 - [`xai-grok-tools/Cargo.toml`](../../crates/codegen/xai-grok-tools/Cargo.toml#L8) 是一个包含工具运行时依赖的实际 crate manifest。
 - [`rust-toolchain.toml`](../../rust-toolchain.toml#L11) 固定 Rust 1.94、rustfmt、clippy 和目标平台。
 
-### 仓库代码摘录：版本由 workspace 统一
+### 项目关键配置：版本由 workspace 统一
 
 目标 crate 的 manifest 使用 workspace 依赖时，版本不在此处重复声明：
 
 ```toml
+# crates/codegen/xai-grok-tools/Cargo.toml 的真实依赖声明节选。
 [dependencies]
 serde = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = [
+    "io-std", "process", "rt", "macros", "rt-multi-thread", "net", "sync",
+] }
 ```
 
-这表示版本与基础 feature 由根 workspace 统一协调。新增依赖前先查根 manifest 是否已有同一 crate；本公开同步树的根 manifest 是生成物，不能把它当作普通编辑入口。
+`workspace = true` 表示版本来自根 workspace；`tokio` 的 feature 则由这个 crate 显式收窄到所需能力。新增依赖前先查根 manifest 是否已有同一 crate；本公开同步树的根 manifest 是生成物，不能把它当作普通编辑入口。
+
+根 manifest 则提供 workspace 级边界：
+
+```toml
+# Cargo.toml 源码节选：根文件只声明 workspace 结构和统一依赖版本。
+[workspace]
+resolver = "2"
+members = [
+    "crates/codegen/xai-grok-shell",
+    "crates/codegen/xai-grok-tools",
+    # ... 其余 member
+]
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+```
+
+这解释了为什么目标 crate 写 `serde = { workspace = true }`：它继承版本，但仍在自己的 manifest 决定是否需要额外 feature。
 
 ## 阅读检查点
 

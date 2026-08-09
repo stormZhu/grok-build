@@ -55,3 +55,38 @@ cache.write().unwrap().insert(key, value);
 ## 14.4 项目中的执行模型
 
 `SessionActor` 在单线程 `LocalSet` 中运行时，可以用 `RefCell` 保存不跨线程的局部状态；跨 task 或跨线程共享才需要 `Arc` 加锁。看到 `Arc<dyn Trait>` 时，它解决的是共享所有权和可替换实现，trait 是否线程安全由 `Send + Sync` 边界决定。
+
+### 项目关键代码：终端状态的共享边界
+
+[`TerminalEntry`](../../crates/codegen/xai-grok-shell/src/terminal/streaming_local_terminal.rs#L131) 把不同并发需求拆成不同同步原语：
+
+```rust
+// 源码节选：ChildWrapper 需要互斥访问，故放进 Arc<Mutex<...>>。
+type ChildHandle = Arc<Mutex<Box<dyn process_wrap::tokio::ChildWrapper>>>;
+
+struct TerminalEntry {
+    child: ChildHandle,
+    // 输出会被读取和追加；Arc 让多个 task 指向同一份状态。
+    output_state: Arc<Mutex<OutputState>>,
+    // Notify 只负责唤醒等待者，不保存业务状态。
+    exit_notify: Arc<tokio::sync::Notify>,
+    cwd: String,
+}
+```
+
+这里的 `Mutex` 是 Tokio 异步锁；读取或更新 `output_state` 后仍应尽快释放 guard，再进行网络或通道等待。
+
+### 项目关键代码：共享 registry 的锁作用域
+
+[`get_entry`](../../crates/codegen/xai-grok-shell/src/terminal/streaming_local_terminal.rs#L159) 用很小的临界区返回 `Arc`：
+
+```rust
+async fn get_entry(session_id: &str, terminal_id: &str) -> Option<Arc<TerminalEntry>> {
+    // key 是新拥有的 String，不借用调用者的 &str。
+    let key = (session_id.to_string(), terminal_id.to_string());
+
+    // cloned() 复制 Arc 后立即 drop MutexGuard；
+    // 调用者随后访问 TerminalEntry 时不会继续占用全局 registry 锁。
+    registry().lock().await.get(&key).cloned()
+}
+```

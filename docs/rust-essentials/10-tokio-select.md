@@ -105,12 +105,15 @@ tokio::select! {
 
 来自 [`run_loop.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs#L309)：
 
+> 下面保留源码原有注释，并额外用“学习注释”标出与本项目会话 Actor 相关的读法；省略的分支不改变 `select!` 的调度规则。
+
 ```rust
 loop {
     tokio::select! {
         biased;  // ① 模式修饰符，不是分支
 
-        // ② 带 if 条件守卫的分支：条件不满足时，整个分支不参与 poll
+        // ② 带 if 条件守卫的分支：条件不满足时，整个分支不参与 poll。
+        // 学习注释：SessionActor 因此不会在 memory 功能关闭时处理 idle flush。
         _ = &mut idle_flush_sleep, if session.idle_flush_timeout.is_some()
             && session.memory.is_enabled()
             && !session.memory.is_flushing.load(Ordering::Relaxed) => {
