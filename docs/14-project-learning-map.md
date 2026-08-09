@@ -159,6 +159,11 @@ owner：谁拥有最终状态
 ## 常用导航命令
 
 ```sh
+# 不知道从哪个实验开始时，先按主题选路径
+docs/rust-essentials/labs/study.sh tracks
+docs/rust-essentials/labs/study.sh list turn
+docs/rust-essentials/labs/study.sh path turn
+
 # 从 Session 的三个核心符号开始
 rg -n "struct SessionHandle|enum SessionCommand|async fn run_session" \
   crates/codegen/xai-grok-shell/src/session

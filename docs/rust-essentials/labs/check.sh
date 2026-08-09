@@ -4,6 +4,8 @@ set -euo pipefail
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 build_dir="$(mktemp -d "${TMPDIR:-/tmp}/grok-rust-katas.XXXXXX")"
 trap 'rm -rf -- "$build_dir"' EXIT
+catalog="$script_dir/demo-catalog.tsv"
+bin_dir="$script_dir/async-demos/src/bin"
 
 rustc --edition 2024 --test "$script_dir/katas.rs" -o "$build_dir/katas"
 "$build_dir/katas"
@@ -33,38 +35,31 @@ check_compile_fail "$script_dir/compile_fail/return_local_reference.rs" E0515
 check_compile_fail "$script_dir/compile_fail/temporary_dropped.rs" E0716
 check_compile_fail "$script_dir/compile_fail/rc_is_not_send.rs" E0277
 
-async_demos=(
-    select_race
-    select_loop
-    select_cancel_drop
-    watch_latest
-    actor_request_reply
-    mini_session_actor
-    mini_turn_end_to_end
-    mini_tool_pipeline
-    mini_permission_layers
-    mini_pager_reducer
-    mini_replay_order
-    mini_storage_recovery
-    mini_cancel_shutdown
-    mini_sampler_retry
-    mini_context_compaction
-    mini_workspace_rewind
-    mini_config_resolution
-    mini_prompt_assembly
-    mini_capability_injection
-    mini_extension_lifecycle
-    mini_host_leader_routing
-    mini_auth_model_boundary
-    mini_mcp_singleflight
-    mini_mcp_dispatch_window
-    mini_subagent_scope
-    mini_workflow_replay
-    mini_trace_timeline
-    spawn_local_rc
-    timer_reset
-    mutex_snapshot
-)
+async_demos=()
+seen_demos=$'\n'
+while IFS=$'\t' read -r demo track focus; do
+    [[ -z "$demo" || "$demo" == \#* ]] && continue
+    if [[ -z "$track" || -z "$focus" ]]; then
+        echo "invalid demo catalog row: $demo" >&2
+        exit 1
+    fi
+    if [[ "$seen_demos" == *$'\n'"$demo"$'\n'* ]]; then
+        echo "duplicate demo catalog entry: $demo" >&2
+        exit 1
+    fi
+    if [[ ! -f "$bin_dir/$demo.rs" ]]; then
+        echo "demo source missing: $bin_dir/$demo.rs" >&2
+        exit 1
+    fi
+    async_demos+=("$demo")
+    seen_demos+="$demo"$'\n'
+done < "$catalog"
+
+source_count="$(find "$bin_dir" -maxdepth 1 -type f -name '*.rs' | wc -l | tr -d '[:space:]')"
+if [[ "${#async_demos[@]}" -ne "$source_count" ]]; then
+    echo "catalog contains ${#async_demos[@]} demos, but $bin_dir contains $source_count sources" >&2
+    exit 1
+fi
 
 for demo in "${async_demos[@]}"; do
     echo "running async demo: $demo"

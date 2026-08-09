@@ -29,13 +29,43 @@ rustc --edition 2024 --test docs/rust-essentials/labs/katas.rs \
 
 每个 demo 都是独立的可执行程序，并包含 `assert!`/`assert_eq!`。不要只看退出码：先预测打印顺序、哪个 future 会被 drop、channel 何时关闭，再对照源码和输出。
 
+### 用学习入口选择实验
+
+不需要先记住 30 个 bin 名。从仓库根目录运行：
+
+```sh
+# 先看六条路径及各自实验数
+docs/rust-essentials/labs/study.sh tracks
+
+# 查看 Turn 路径，再深入一个实验
+docs/rust-essentials/labs/study.sh list turn
+docs/rust-essentials/labs/study.sh show mini_turn_end_to_end
+
+# 单独运行，或按目录顺序运行整条路径
+docs/rust-essentials/labs/study.sh run mini_turn_end_to_end
+docs/rust-essentials/labs/study.sh path turn
+```
+
+`study.sh` 在每次运行前打印观察目标；它不记录“已完成”状态，也不会跳过实验。先把预测写进自己的学习记录，再运行并解释断言。六条路径来自同一份 [`demo-catalog.tsv`](./demo-catalog.tsv)，一键校验也读取这份目录，因此新增 bin 后若忘记登记会立即失败。
+
+| 路径 | 数量 | 适合解决的问题 |
+| --- | ---: | --- |
+| `async-core` | 8 | `select!`、drop、channel、local task、timer 与锁怎样工作？ |
+| `turn` | 5 | 一条 Prompt 怎样排队、采样、渲染、flush 并完成？ |
+| `tool-safety` | 4 | 工具的类型、权限、资源和 lifecycle gate 怎样分层？ |
+| `state-recovery` | 4 | compaction、持久化、rewind、cancel/shutdown 怎样恢复？ |
+| `runtime-assembly` | 4 | 配置、prompt、模型/认证与 Host/Leader 怎样装配？ |
+| `integration` | 5 | MCP、子代理、Workflow 和 trace 怎样跨模块保持边界？ |
+
+也可以绕过入口脚本，直接运行 Cargo 命令：
+
 ```sh
 cargo run --locked \
   --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
   --bin select_race
 ```
 
-将最后的 bin 名替换为表中任意名称即可单独运行：
+将最后的 bin 名替换为表中任意名称即可单独运行。下面的完整表适合查阅具体预测题；只想选路径时使用 `study.sh list [track]`：
 
 | bin | 运行前预测 | 观察重点 |
 | --- | --- | --- |
@@ -78,6 +108,9 @@ cargo run --locked \
 
 ```sh
 docs/rust-essentials/labs/check.sh
+
+# 等价入口
+docs/rust-essentials/labs/study.sh all
 ```
 
 脚本只在 `mktemp` 创建的临时目录中写编译产物（包括 `CARGO_TARGET_DIR`），结束后自动清理。

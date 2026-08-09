@@ -10,6 +10,8 @@
 
 建议先浏览 [12-glossary.md](./12-glossary.md) 的总体关系图和 owner 速查，再按顺序完成 0→10。每个实验都可以在不接入真实模型、不使用真实 API key 的情况下完成。
 
+不确定从哪一组开始时，先运行 `docs/rust-essentials/labs/study.sh tracks`；例如 `study.sh path turn` 会按认知依赖顺序运行 Session、Sampler、整轮 Turn、Pager 和 Replay 五个缩小实验。脚本只负责选择和运行，下面每节的“完成证据”仍需自己产出。
+
 ---
 
 ## 0. 建立自己的源码地图

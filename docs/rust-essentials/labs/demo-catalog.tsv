@@ -1,0 +1,31 @@
+# bin	track	focus
+select_race	async-core	观察 select! 竞争、胜出分支和未完成 Future 的 drop
+select_loop	async-core	观察循环中的 recv、timer guard 与 channel close
+select_cancel_drop	async-core	区分 Future drop、RAII cleanup 和已发生的外部副作用
+watch_latest	async-core	区分 watch 的最新状态、版本通知和事件队列
+actor_request_reply	async-core	观察 mpsc command、oneshot reply 和单一状态 owner
+spawn_local_rc	async-core	理解 LocalSet 中 Rc<RefCell<_>> 的线程与生命周期边界
+timer_reset	async-core	复用并 reset 一个 pinned Sleep
+mutex_snapshot	async-core	在 await 前释放锁并保留 owned snapshot
+mini_session_actor	turn	观察 mailbox、输入队列、单一 running Turn 和 completion 回流
+mini_sampler_retry	turn	区分 logical request、attempt、retry veto 和 Session 恢复
+mini_turn_end_to_end	turn	串起一 Turn 两次 sampling、tool join 和四种确认边界
+mini_pager_reducer	turn	观察 stream/echo 合并、tool ID、follow 与 finish
+mini_replay_order	turn	验证 chunk 合并、强制 flush 和 TurnCompleted 顺序
+mini_tool_pipeline	tool-safety	串起 JSON 参数、权限、Progress/Terminal 和 ChatState 写回
+mini_permission_layers	tool-safety	区分 plan、permission manager、managed deny 和 OS sandbox
+mini_capability_injection	tool-safety	观察 typed Resources、rebuild 和 ephemeral call context
+mini_extension_lifecycle	tool-safety	区分 contributor、hook gate、permission gate 和 post terminal
+mini_context_compaction	state-recovery	区分 request pruning 与权威 history full replace
+mini_storage_recovery	state-recovery	验证 durable ack、提交分类、torn tail 和原子 snapshot
+mini_workspace_rewind	state-recovery	观察修改前权限、before/after、冲突和 checkpoint truncate
+mini_cancel_shutdown	state-recovery	区分 Turn cancel 与 Session shutdown 的清理所有权
+mini_config_resolution	runtime-assembly	观察配置深度合并、来源优先级和 Session snapshot
+mini_prompt_assembly	runtime-assembly	拆分 stable system、首轮规则、conversation 和 reminder
+mini_auth_model_boundary	runtime-assembly	验证 wire model、endpoint gate、401 budget 和 secret 脱敏
+mini_host_leader_routing	runtime-assembly	观察入口优先级、ready/auth、client capability 和 ID namespace
+mini_mcp_singleflight	integration	验证单飞握手、取消恢复和 stale close 隔离
+mini_mcp_dispatch_window	integration	观察事件合并窗口、identity eviction 和 recovery routing
+mini_subagent_scope	integration	区分 fresh/fork/resume、父子 history、cwd 和 owner cancel
+mini_workflow_replay	integration	验证 journal hash、无副作用 replay 和预算 reservation
+mini_trace_timeline	integration	串起 task context、关联 ID、traceparent 和默认拒绝导出

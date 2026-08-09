@@ -64,7 +64,7 @@
 | [21 模块、可见性与 API 导航](./21-modules-and-api-navigation.md) | crate/module 边界、`mod`/`use`/`pub use`、源码跳转和依赖方向 |
 | [22 仓库源码实验](./22-repository-reading-labs.md) | 由浅入深的真实源码任务、产出模板、自检答案和毕业标准 |
 | [23 编译器错误诊断地图](./23-compiler-error-atlas.md) | 所有权、借用、类型推断、trait、dyn 与异步 `Send` 错误的系统排查方法 |
-| [Rust 可运行实验](./labs/README.md) | 13 个标准库 Katas、6 个 compile-fail 练习、30 个 Tokio async demos 与一键校验脚本 |
+| [Rust 可运行实验](./labs/README.md) | 13 个标准库 Katas、6 个 compile-fail、30 个 Tokio async demos、六条 `study.sh` 学习路径与一键校验 |
 
 ## 每篇文章的使用方法
 
