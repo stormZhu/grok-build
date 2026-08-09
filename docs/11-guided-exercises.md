@@ -193,6 +193,7 @@ rg -n "ReplayBuffer|replay_buffer\.flush|FlushReplay" \
 - `crates/codegen/xai-grok-agent/src/prompt/template.rs`
 - `crates/codegen/xai-grok-agent/templates/prompt.md`
 - `crates/codegen/xai-grok-agent/templates/subagent_prompt.md`
+- [deep-dives/prompt-assembly.md](./deep-dives/prompt-assembly.md)
 
 ### 操作
 
@@ -287,6 +288,7 @@ JSON args -> Args -> Tool::execute -> Progress* -> Terminal -> ToolRunResult
 - `crates/codegen/xai-grok-sampler/src/stream/`
 - `crates/codegen/xai-grok-sampler/src/retry.rs`
 - `crates/codegen/xai-grok-shell/src/sampling/`
+- [deep-dives/sampling-lifecycle.md](./deep-dives/sampling-lifecycle.md)
 
 ### 操作
 
@@ -438,12 +440,13 @@ Owner：哪个 actor/crate 拥有权威状态？
 
 | 方向 | 下一篇/下一组源码 |
 |---|---|
-| Rust async/actor | `rust-essentials/08`–`17`、shell `run_loop.rs` |
-| Agent 行为和 prompt | `05-prompt-engineering.md`、`xai-grok-agent/src/prompt/` |
+| Rust async/actor | `rust-essentials/08`–`17`、shell `run_loop.rs`、[`sampling-lifecycle.md`](./deep-dives/sampling-lifecycle.md) |
+| Agent 行为和 prompt | `05-prompt-engineering.md`、[`prompt-assembly.md`](./deep-dives/prompt-assembly.md)、`xai-grok-agent/src/prompt/` |
 | 工具和安全 | `deep-dives/tool-call-pipeline.md`、workspace permission、sandbox |
 | 长会话和 memory | `04-context-management.md`、compaction、memory crate |
 | ACP/MCP 集成 | `06-interfaces.md`、`xai-acp-lib`、`xai-grok-mcp`、[`mcp-lifecycle.md`](./deep-dives/mcp-lifecycle.md) |
 | TUI/终端 | `xai-grok-pager`、markdown、PTY harness、ratatui crates |
 | 代码索引和 workspace | `xai-codebase-graph`、fsnotify、fast-worktree、hunk tracker |
+| 开发与贡献实践 | [`contributor-workflow.md`](./deep-dives/contributor-workflow.md)、`xai-grok-test-support`、`xai-grok-shell/tests/` |
 
 目标不是背下 81 个 package，而是能从一个用户可见行为找到正确 owner，并用 Rust 类型、Agent 语义和测试证据解释这条路径。

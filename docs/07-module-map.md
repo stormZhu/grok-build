@@ -61,6 +61,9 @@
 | `.../src/compaction.rs` | `CompactionPolicy` |
 | `.../src/system_reminder.rs` | ReminderPolicy |
 | `.../src/prompt/` | 模板、AGENTS、skills、user_message |
+| `.../src/prompt/context.rs` | `PromptContext`、audience、extend/full system render |
+| `.../src/prompt/agents_md.rs` | AGENTS/Claude/rules 发现、排序、去重 |
+| `.../src/prompt/user_message.rs` | workspace/rules/skills/MCP 首轮 user preamble |
 | `.../templates/prompt.md` | **主系统提示源** |
 | `.../templates/subagent_prompt.md` | 子代理提示源 |
 | `.../templates/apply_patch_prompt.md` | patch 工具提示 |
@@ -85,6 +88,8 @@
 | `.../client.rs` | SamplingClient |
 | `.../stream/` | 流解析 completions/responses/messages |
 | `.../actor/` | SamplerActor |
+| `.../actor/request_task.rs` | 一次请求的 attempt、retry、cancel 与 completion oneshot |
+| `.../events.rs` / `retry.rs` | 统一 `SamplingEvent`、纯 retry 决策 |
 | `.../retry.rs` / `doom_loop.rs` | 重试与死循环信号 |
 
 ---
@@ -177,9 +182,11 @@
 |-------|------|
 | 从编译跑起来 | `README.md` + `xai-grok-pager-bin` |
 | 看主 system prompt | `xai-grok-agent/templates/prompt.md` |
+| 看模型上下文如何装配 | `AgentBuilder` + `PromptContext` + `prompt_build.rs` |
 | 跟一次用户消息 | `turn.rs` `handle_prompt` |
 | 跟 tool call | `tool_calls.rs` + `bridge.rs` |
 | 看发给模型的 JSON 形态 | `sampling-types/conversation.rs` + `request_builder.rs` |
+| 跟一次采样、流式 chunk 和 retry | `sampler_turn.rs` + `xai-grok-sampler/{actor,stream,retry}.rs` |
 | 看压缩如何换历史 | `code_compaction/*` + `session/compaction.rs` |
 | 看 session 如何落盘/恢复 | `session/persistence.rs` + `session/storage/jsonl/` |
 | 看 replay 如何处理 rewind 分支 | `session/storage/mod.rs` + `session/acp_session_impl/rewind.rs` |
@@ -209,3 +216,6 @@
 - [源码精读：Pager 渲染](./deep-dives/pager-rendering.md)
 - [源码精读：MCP 生命周期](./deep-dives/mcp-lifecycle.md)
 - [源码精读：会话持久化与重放](./deep-dives/persistence-and-replay.md)
+- [源码精读：采样生命周期](./deep-dives/sampling-lifecycle.md)
+- [源码精读：Prompt 装配](./deep-dives/prompt-assembly.md)
+- [源码精读：贡献者工作流](./deep-dives/contributor-workflow.md)
