@@ -67,6 +67,7 @@
 23. **源码精读 / workspace-state-and-worktree-lifecycle** — 理解文件快照、FS/git/hunk rewind、checkpoint durability 和 worktree 隔离
 24. **源码精读 / observability-and-trace-timeline** — 学会用关联 ID、span、unified log、firehose 和 OTLP 还原一次消息
 25. **源码精读 / contributor-workflow** — 学会按 owner 选测试、收集异步/协议证据并写出可审查改动
+26. **源码精读 / resources-and-capability-injection** — 理解工具依赖、session 能力、取消和持久化资源如何注入与重建
 
 ---
 

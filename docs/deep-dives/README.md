@@ -7,6 +7,7 @@
 - [run-session.md](./run-session.md)：`SessionActor` 的 `run_session` 事件循环、Prompt/Turn 链路与关闭流程。
 - [message-flow.md](./message-flow.md)：用户从按下 Enter 到 UI/ACP 完成响应的完整消息流程，含队列、图片、skills、ChatState、sampling 和工具循环。
 - [tool-call-pipeline.md](./tool-call-pipeline.md)：从模型工具调用追到权限、注册表、流式执行、结果回写与下一次采样。
+- [resources-and-capability-injection.md](./resources-and-capability-injection.md)：区分 `ToolCallContext`、Grok tools `Resources` 和 shell `ToolContext`，追踪能力注入、持久化与 rebuild。
 - [permissions-and-sandbox.md](./permissions-and-sandbox.md)：`AccessKind`、权限策略、YOLO/auto、plan gate 与 OS sandbox 的安全边界。
 - [workspace-state-and-worktree-lifecycle.md](./workspace-state-and-worktree-lifecycle.md)：`WorkspaceSession`、文件 before/after snapshot、FS/git/hunk rewind、durable checkpoint 与 worktree fork/apply/remove。
 - [pager-rendering.md](./pager-rendering.md)：ACP `SessionUpdate` 如何增量合并为 `RenderBlock`，再由 scrollback/layout 渲染到终端。

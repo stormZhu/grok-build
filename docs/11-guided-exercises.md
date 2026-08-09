@@ -270,7 +270,7 @@ JSON args -> Args -> Tool::execute -> Progress* -> Terminal -> ToolRunResult
 - 流结束但没有最终结果：runtime stream invariant；
 - UI 有结果但模型不知情：`prompt_text` 或 ChatState mutation。
 
-新增工具前先读 [tool-call-pipeline.md](./deep-dives/tool-call-pipeline.md) 的最小清单。
+新增工具前先读 [tool-call-pipeline.md](./deep-dives/tool-call-pipeline.md) 的最小清单，再读 [resources-and-capability-injection.md](./deep-dives/resources-and-capability-injection.md)，为每个依赖决定它属于 call context、toolset resources 还是 SessionActor。
 
 ---
 

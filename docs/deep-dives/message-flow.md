@@ -154,6 +154,69 @@ let result = acp_send(request, &acp_tx).await;
 
 调试 ACP/IDE 问题时，首先确认这些 meta 在发送端存在，接收端没有在跨 channel 时丢失。
 
+### 3.2 不要把一次 `await` 当成一次 turn：六个边界的契约
+
+这条路径里有很多 `await`，但它们等的不是同一件事。Pager 中 `acp_send(req, &tx).await` 返回，表示 server 已把这条 prompt 的 `PromptTurnResult` 回传：turn worker 已经结束，并且 completion arm 已先 flush replay buffer。它仍**不能证明**本客户端已经渲染完所有 notification，或 durable `TurnCompleted` 已写完；`handle_completion` 先 resolve `respond_to`，再走 terminal notification 的持久化路径。UI 事件循环本身没有被它阻塞，因为 effect 已在后台 task 中执行。
+
+把每次跨所有权边界都按下面四个问题审查，能避免多数“消息丢了/重复了/明明完成却还在转”的问题：谁拥有状态？携带什么值？谁能取消？什么才算成功？
+
+| 边界 | 发送者拥有的状态 | 跨边界的主要载荷 | 接收方承诺的最早完成点 | 不能据此推断什么 |
+|---|---|---|---|---|
+| 键盘 -> Pager dispatch | `PromptWidget` 草稿、图片 chip、当前 view | `Action::SendPrompt(String)` | dispatch 已接受一次用户意图 | session 已存在，或模型会被调用 |
+| Pager dispatch -> 本地 queue | `AgentView`、scrollback、`pending_prompts` | `QueuedPrompt` / `prompt_id` / wire blocks | 用户文本可本地回显，或被明确拒绝/延后 | ACP 已收到任何字节 |
+| queue -> effect task | queue 的 FIFO 和当前 idle 状态 | `Effect::SendPrompt{...}` 或 `SendPromptBlocks{...}` | 后台 task 已被安排；UI 可继续收键盘事件 | server 已把它放进权威队列 |
+| Pager -> ACP/session | ACP connection 和一次 request future | `PromptRequest { session_id, ContentBlock[], _meta }` | 对正常 prompt，turn worker 已返回且 response 已被 resolve | client 已渲染所有 notification，或 durable terminal 已写入 |
+| SessionActor -> ChatStateActor | session 调度状态、当前 `InputItem` | `ConversationItem::User`、工具结果、request build 命令 | actor 已接受 mutation；带 ack 的路径还可等待 flush | Pager 已经收到相应 UI update |
+| sampler/tool tasks -> SessionActor | 网络/工具子任务的局部状态 | `SamplingEvent`、`ConversationResponse`、tool result、completion | session 已按自己的串行规则消费事件 | 所有 buffered notification 已按顺序落盘 |
+
+下面是 queue 到 shell 的简化代码形状。它刻意省略 tracing、错误映射和多个 meta 字段，保留两个必须读懂的事实：Pager 在 task 中等待 RPC；shell 在 actor loop 中把 prompt 入队后，才按空闲条件启动真正的 turn。
+
+```rust
+// Pager effects/mod.rs：UI loop 启动后台任务，而不是直接跑 agent loop。
+tasks.spawn(async move {
+    let req = acp::PromptRequest::new(session_id, blocks)
+        .meta(prompt_request_meta(&prompt_id, screen_mode));
+    let result = acp_send(req, &acp_tx).await;
+    TaskResult::PromptResponse { prompt_id: Some(prompt_id), result: ... }
+});
+
+// shell run_loop.rs：唯一的 SessionActor loop 接收命令并决定何时开跑。
+SessionCommand::Prompt { prompt_id, prompt_blocks, send_now, ... } => {
+    let cancel_for_send_now = session.queue_input(QueueInputRequest {
+        prompt_id, prompt_blocks, send_now, ...
+    }).await;
+    if cancel_for_send_now {
+        session.cancel_turn_for_send_now(&mut replay_buffer).await;
+    }
+    SessionActor::maybe_start_running_task(session.clone(), completion_tx.clone()).await;
+}
+```
+
+这不是多余的间接层。`queue_input` 在 session state 的 `pending_inputs` 中维护 server-authoritative FIFO；`maybe_start_running_task` 只让前端合法条目取得 running task。leader mode 下，Pager 的本地 queue 和服务器广播的 shared queue 还会暂时并存，所以不要绕过这些入口直接修改 `current_prompt_id` 或 scrollback，来“修复”一个排队问题。
+
+### 3.3 四种确认信号，分别证明什么
+
+同一个 `prompt_id` 会出现在四种不同强度、不同用途的确认里。排障或写测试时，应选择与需求匹配的那个，而不是看到任一成功回调就断言整轮已结束：
+
+```mermaid
+flowchart LR
+    A[本地回显\nscrollback UserPrompt] -->|用户看见输入| B[streaming SessionUpdate]
+    B --> C[flush buffered delta]
+    C --> D[RPC response\nPromptResponse]
+    D --> E[durable terminal\nTurnCompleted]
+    E --> F[session 启动下一条 queue]
+    X[ChatState persist_ack] -.可选的用户消息写盘屏障.-> C
+```
+
+| 信号 | 在何处产生 | 它证明了什么 | 适合什么测试/排障 |
+|---|---|---|---|
+| 本地 `UserPrompt` | Pager `maybe_drain_queue` | 本客户端已乐观展示这条输入 | 输入框、图片 chip、重复回显问题 |
+| `TaskResult::PromptResponse` | Pager effect 的 ACP future 返回后 | turn result 已从 server 返回；但该 result 先于 server 的 terminal notification 持久化 | ACP transport、请求 meta、请求完成后的 UI state |
+| `persist_ack` | `handle_prompt` 中 ChatState mutation 后，再经 persistence `FlushAndAck` | **若调用方要求它**，用户 message 已经过 actor 和对应 flush 屏障 | resume/rewind 前必须读到用户消息的流程 |
+| `TurnCompleted` | `turn_end.rs::emit_turn_completed` | 这轮有可持久化、可 replay 的 terminal outcome | 生命周期、cancel、队列推进和恢复测试 |
+
+普通 UI 场景不应因为需要一个“已显示”信号就等待 `persist_ack`，更不应把它替换为 sleep。反过来，若代码在收到 `persist_ack` 后立刻读取 session 文件，才有理由把它看作 durability 边界。这个区分也解释了为什么用户消息已经出现在终端里，磁盘文件或 ChatState snapshot 却可能尚未可读；同样地，`PromptResponse` 返回后还要用 `TurnCompleted` 或 replay 文件验证 terminal persistence。
+
 ---
 
 ## 4. 阶段 2：`run_session` 接收并调度 Prompt
@@ -425,6 +488,117 @@ TurnOutcome
 - **产品完成**：hooks、usage、replay、chat history 和客户端 response 都已处理。
 
 对用户而言，最终看到的是 Pager 的 scrollback/状态更新；对 ACP client 而言，最终看到的是 `PromptResponse` 和一串 `SessionNotification`；对后续 turn 而言，权威证据是 ChatState 和持久化历史。三者应一致，但时间点不完全相同。
+
+### 9.1 用一条带工具调用的消息看四次状态快照
+
+下面的例子延续“读取 `src/main.rs` 并说明入口函数”。方框里的字段是帮助阅读的**概念快照**，不是可直接复制的 Rust struct literal；字段名尽量对应 `AgentView`、session state、ChatState 和 replay/persistence 的真实职责。最有价值的不是记住每个字段，而是每个时刻只向其 owner 问一个问题。
+
+```mermaid
+sequenceDiagram
+    participant UI as Pager
+    participant SS as Session state
+    participant CS as ChatState
+    participant LLM as Sampler
+    participant FS as Tool/runtime
+    participant DB as JSONL/replay
+
+    UI->>UI: S0: local queue + UserPrompt
+    UI->>SS: S1: PromptRequest(p42)
+    SS->>CS: S1: append User(p42)
+    CS-->>SS: request snapshot
+    SS->>LLM: S2a: sample #1
+    LLM-->>UI: text/tool-call deltas
+    SS->>FS: S2b: read_file
+    FS-->>SS: tool result
+    SS->>CS: append assistant tool call + result
+    SS->>LLM: S3: sample #2
+    LLM-->>UI: final text deltas
+    SS->>CS: append final assistant item
+    SS->>DB: flush buffered updates
+    SS-->>UI: PromptResponse
+    SS->>DB: durable TurnCompleted
+    SS->>SS: start next queued input
+```
+
+#### S0：按下 Enter 后，只有本地 UI 知道“它已经显示”
+
+```text
+Pager / AgentView
+  prompt.text            = ""                 # 已从 composer 取走
+  pending_prompts        = [p42] or []         # 取决于是否立即 drain
+  current_prompt_id      = Some("p42")         # 仅在已启动时
+  scrollback             = [..., UserPrompt("读取 src/main.rs ...")]
+
+Session state / ChatState / disk
+  尚未要求它们已经有 p42
+```
+
+`maybe_drain_queue` 先检查 local idle、model switch、replay、shared queue 和编辑中的队首，才 dequeue。若任一条件阻塞，用户消息留在 `pending_prompts` 是正确行为，不是丢失。此时排查的 owner 是 Pager：看 `prompt.drain_blocked` 的 reason、队列长度和 `prompt_id`，而不是先找 sampler 日志。
+
+#### S1：Session 已接收，但模型仍可能一个 token 都没见到
+
+```text
+SessionActor state
+  pending_inputs          = [InputItem { prompt_id: "p42", ... }]
+  running_task            = Some(...)           # start 条件满足后
+  current/running prompt  = "p42"
+
+ChatState
+  conversation            = [..., User(p42)]    # 处理到 append 之后
+  request snapshot        = system + history + tools + User(p42)
+
+Pager
+  本地 UserPrompt 已存在；收到 server echo 时由 skip_next_user_echo 去重
+```
+
+`run_session` 的 `SessionCommand::Prompt` 分支会先执行 admission、prefix 和 trace context 处理，再调用 `queue_input`。`handle_prompt` 解析完 slash/skill/图片后发出 `UserMessageChunk`，并把 user item 交给 ChatState。一个容易遗漏的细节是 Pager 已经预先调用 tracker 的 `expect_user_echo()`：live ACP echo 回来后，`handle_user_message` 消耗这个一次性标记、补回 `promptIndex`，而不再插入第二个 `UserPrompt`。所以“本地发消息后只显示一次”依赖的是 `prompt_id`/echo 协议，而不是靠文本去重。
+
+#### S2：第一个模型请求结束，不等于这条消息结束
+
+```text
+Sampling #1 的权威结果
+  assistant item          = tool call: read_file({ path: "src/main.rs" })
+  tool_call_id            = tc17
+
+工具阶段
+  permission/dispatch     = Pending -> Running -> Completed
+  tool result             = { tool_call_id: "tc17", prompt_text: "..." }
+
+ChatState
+  conversation            = [..., User(p42), Assistant(tool tc17), ToolResult(tc17)]
+```
+
+streaming delta 可以已经被 Pager 渲染，但完整 assistant tool-call item 和工具结果要由 session 按配对规则写入 ChatState。`tc17` 是 assistant call 与 tool result 的 join key，不能用“第几个工具”或 arrival order 配对。之后第二次 sampling 的 request 才带着这两个 item 继续。这就是主文中 `loop { build request -> sample -> execute tools }` 不是一次函数调用、而是 agent runtime 的核心循环的原因。
+
+#### S3：终端事件必须落在最后一个 buffered delta 之后
+
+```text
+Sampler #2
+  final assistant text    = "入口是 main ..."
+
+ChatState
+  conversation            = [..., Assistant(final text)]
+
+Replay / storage
+  buffered SessionUpdate  = flush first
+  durable terminal        = TurnCompleted { prompt_id: "p42", ... }
+
+Pager
+  in_flight_prompt        = cleared only after PromptResponse handling
+  next queued prompt      = session may start it after terminal processing
+```
+
+`run_loop.rs` 的 completion arm 在 `handle_completion` 前显式 `replay_buffer.flush()`；`handle_completion` 先 resolve RPC 的 `respond_to`，再通过单一 `emit_turn_completed` chokepoint 生成可 replay terminal，随后外层 loop 才尝试启动下一项。这条顺序是可靠性协议，不是 UI 优化：若 `TurnCompleted` 抢在最后的 assistant delta 前进入 `updates.jsonl`，恢复流程可能把一轮已标记完成的回答截断。
+
+### 9.2 三条跨模块顺序不变量
+
+| 不变量 | 保护机制 | 违例时的可见症状 | 第一个应看的位置 |
+|---|---|---|---|
+| 一个本地发送不应产生两个用户气泡 | `dispatch_send_prompt` 的乐观 block + tracker `skip_next_user_echo` | 发送后同一文本重复出现；prompt index 绑定错旧气泡 | Pager `acp/tracker.rs::handle_user_message` |
+| 一个 tool result 必须对应此前 assistant call | `tool_call_id` 的显式配对和 ChatState 顺序 | 模型说“没有工具结果”、resume 时 history 不合法 | `turn.rs` 的 response mutation 与 `tool_calls.rs` |
+| `TurnCompleted` 晚于最后一个 buffered update | completion/cancel/shutdown 都先 flush replay buffer | replay 少最后几字、下次恢复时回答截断 | `run_loop.rs` completion arm 与 `turn_end.rs` |
+
+写新 feature 时，用这张表决定测试断言的层级。比如修改 scrollback 只需测第一条；改 tool protocol 必须测第二条；改 persistence 或 cancellation，则第三条必须有回归测试。不要为了验证任何一条而把所有层都启动起来，测试专题中的 `MockInferenceServer`、typed ACP client 和 JSONL fixture 就是为了让这些边界能独立观察。
 
 ---
 

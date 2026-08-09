@@ -57,7 +57,7 @@ cargo tree -p xai-grok-shell --depth 1
 | `xai-chat-state` | `crates/codegen/xai-chat-state` | conversation 权威状态、usage、持久化与 request builder | `src/actor/`, `src/handle.rs` |
 | `xai-grok-sampler` | `crates/codegen/xai-grok-sampler` | 模型 HTTP streaming、响应解析、retry actor | `src/client.rs`, `src/actor/`, `src/stream/` |
 | `xai-grok-sampling-types` | `crates/codegen/xai-grok-sampling-types` | Conversation、request/response、tool call 和 usage 数据类型 | `src/conversation.rs`, `src/lib.rs` |
-| `xai-grok-tools` | `crates/codegen/xai-grok-tools` | ToolBridge、registry、内置/MCP/兼容工具 | `src/bridge.rs`, `src/registry/`, `src/implementations/` |
+| `xai-grok-tools` | `crates/codegen/xai-grok-tools` | ToolBridge、registry、Resources、内置/MCP/兼容工具 | `src/bridge.rs`, `src/registry/`, `src/types/resources.rs`, `src/implementations/` |
 | `xai-grok-workspace` | `crates/codegen/xai-grok-workspace` | 本机 FS、Git/jj、命令执行、workspace session | `src/lib.rs`, `src/permission/`, `src/file_system/` |
 | `xai-grok-compaction` | `crates/common/xai-grok-compaction` | 与传输解耦的上下文压缩和历史重建 | `src/lib.rs`, `src/code_compaction/` |
 | `xai-grok-mcp` | `crates/codegen/xai-grok-mcp` | MCP server 连接、OAuth、credential store | `src/lib.rs`, `src/servers.rs`, `src/credentials.rs` |
@@ -107,7 +107,7 @@ cargo tree -p xai-grok-shell --depth 1
 | `xai-computer-hub-sdk` | `crates/common/xai-computer-hub-sdk` | connection pool、reconnect、tool harness/server runtime | `src/lib.rs`, `src/` |
 | `xai-computer-hub-mcp-adapter` | `crates/common/xai-computer-hub-mcp-adapter` | 将 MCP 发现工具注册成 Hub 原生工具 | `src/lib.rs`, `src/bridge.rs` |
 | `xai-grok-tools-api` | `crates/codegen/xai-grok-tools-api` | protobuf API 定义和生成类型 | `proto/`, `build.rs`, `src/lib.rs` |
-| `xai-grok-tools` | `crates/codegen/xai-grok-tools` | GrokBuild 工具 registry、资源和实现 | `src/registry/types.rs`, `src/bridge.rs` |
+| `xai-grok-tools` | `crates/codegen/xai-grok-tools` | GrokBuild 工具 registry、资源注入、持久化和实现 | `src/registry/types.rs`, `src/types/resources.rs`, `src/bridge.rs` |
 | `xai-grok-mcp` | `crates/codegen/xai-grok-mcp` | rmcp 适配、MCP OAuth 和 server 生命周期 | `src/servers.rs`, `src/oauth.rs`, `src/credentials.rs` |
 
 工具的依赖方向应大致保持：

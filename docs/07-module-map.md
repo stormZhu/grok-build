@@ -119,6 +119,7 @@
 | `crates/common/xai-tool-types/src/` | 共享工具类型 |
 | `crates/codegen/xai-grok-tools/src/bridge.rs` | ToolBridge |
 | `.../registry/` | 注册与 finalize |
+| `.../types/resources.rs` | `Resources`、`Params`/`State`、ephemeral capability 与资源持久化 key |
 | `.../implementations/grok_build/` | 主工具实现 |
 | `.../implementations/codex/` | Codex 移植 |
 | `.../implementations/opencode/` | OpenCode 移植 |
@@ -235,3 +236,4 @@
 - [源码精读：子代理与 Workflow](./deep-dives/subagents-and-workflows.md)
 - [源码精读：可观测性与 Trace Timeline](./deep-dives/observability-and-trace-timeline.md)
 - [源码精读：贡献者工作流](./deep-dives/contributor-workflow.md)
+- [源码精读：资源注入与能力边界](./deep-dives/resources-and-capability-injection.md)
