@@ -12,6 +12,7 @@
 - [tool-call-pipeline.md](./tool-call-pipeline.md)：工具调用的细节和新增工具清单。
 - [permissions-and-sandbox.md](./permissions-and-sandbox.md)：工具调用进入权限策略和 OS 沙箱后的安全边界；
 - [pager-rendering.md](./pager-rendering.md)：ACP 更新如何回到 `RenderBlock`、scrollback 和终端画面。
+- [observability-and-trace-timeline.md](./observability-and-trace-timeline.md)：如何用 `session_id`、`prompt_id`、`tool_call_id`、`traceparent` 和 unified log 还原下面这条控制流。
 
 ---
 

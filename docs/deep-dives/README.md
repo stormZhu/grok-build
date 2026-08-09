@@ -21,5 +21,6 @@
 - [configuration-and-runtime-resolution.md](./configuration-and-runtime-resolution.md)：从 `ConfigLayers`、TOML 深度合并和 requirements/MDM，追到 `new_from_toml_cfg`、runtime resolver、远端 settings refresh 与 session snapshot。
 - [subagents-and-workflows.md](./subagents-and-workflows.md)：从 `task` 请求追到 child `SessionActor`、definition/role/persona、fork/resume、worktree 和 cancellation，再追到 Rhai Workflow 的 host service、journal、预算与恢复状态机。
 - [contributor-workflow.md](./contributor-workflow.md)：从症状、owner、mock fixture 和异步测试，建立可审查的开发/贡献证据链。
+- [observability-and-trace-timeline.md](./observability-and-trace-timeline.md)：从 tracing span、ACP/HTTP `traceparent`、unified JSONL、debug firehose 和 OTLP 脱敏，反向还原一次用户消息的完整时间线。
 
 后续适合放入本目录的主题包括 MCP dispatcher 等。

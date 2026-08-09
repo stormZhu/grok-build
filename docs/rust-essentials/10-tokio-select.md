@@ -36,9 +36,11 @@ _ = &mut dream_check_sleep, if 条件A && 条件B => { 做事 }
 _ = 等公交车(), if 今天下雨 && 我带了伞 => { 上车 }
 ```
 
-- 不下雨？那这整行直接跳过，根本不去等公交。
-- 下雨但没带伞？也跳过。
+- 不下雨？这条分支不参与等待和竞争，根本不会去等公交。
+- 下雨但没带伞？同样不参与。
 - 下雨且带了伞？那就等公交，车来了就上车。
+
+> 更准确地说，`if` 为 `false` 时，future 表达式可能仍会被求值、创建，但不会被 `poll`；因此它不能让这次 `select!` 完成。
 
 ---
 
@@ -158,7 +160,7 @@ _ = &mut idle_flush_sleep, if 条件A && 条件B => { ... }
 ```
 
 - `_ = &mut idle_flush_sleep` — 等什么：poll 这个定时器 future，忽略返回值（`_`）
-- `, if 条件A && 条件B` — 前提条件：条件为 `false` 时，定时器**根本不会被 poll**
+- `, if 条件A && 条件B` — 前提条件：条件为 `false` 时，定时器**根本不会被 poll**（但表达式本身可能已经创建了这个 future）
 - `=> { ... }` — 到期后执行什么
 
 **为什么用 `if` 守卫？** 当用户没有配置超时（`timeout` 为 `None`）时，对应的 `Sleep` 被设为 `Duration::MAX`（永不触发）。用 `if` 守卫直接跳过，避免无意义地 poll 一个永远不会到期的 future，零开销。
@@ -227,6 +229,102 @@ Some(message) = receiver.recv() => { ... } // 只匹配 Some，并取出 message
 ```
 
 如果模式不匹配，该分支在本次 `select!` 调用中会被跳过，继续等待其他分支。例如 `Some(message)` 不会匹配 channel 关闭时的 `None`。
+
+### Future 是怎么被 `poll` 的？
+
+`select!` 确实会 poll 它的每个分支，但 `select!` 不是唯一会 poll Future 的东西。最常见的两种方式是：
+
+```rust
+// 方式一：直接 await
+tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+// 方式二：交给 select!，和其他 Future 竞争
+tokio::select! {
+    _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {
+        println!("一秒到了");
+    }
+    _ = cancel.cancelled() => {
+        println!("被取消");
+    }
+}
+```
+
+Future 本身是惰性的。下面这行只创建定时器，并不会等待一秒：
+
+```rust
+let sleep = tokio::time::sleep(std::time::Duration::from_secs(1));
+```
+
+只有把它 `.await`，或把它交给 `select!`、任务运行时等会驱动 Future 的机制，它才会被 poll。可以把 `.await` 粗略理解为：运行时反复 poll 这个 Future；如果得到 `Pending` 就暂时暂停，等它通过 waker 通知“有进展”后再继续 poll。
+
+`dream_check_sleep` 的情况就是第二种：`select!` 同时 poll 定时器、channel 和其他分支。定时器尚未到期时返回 `Pending`，到期后返回 `Ready(())`，于是对应的 `=>` 处理块被执行。
+
+如果不需要和其他事件竞争，也可以直接使用它：
+
+```rust
+let sleep = tokio::time::sleep(std::time::Duration::from_secs(1));
+sleep.await;
+println!("一秒到了");
+```
+
+如果要重复使用同一个定时器，可以 pin 后反复等待并 reset：
+
+```rust
+let sleep = tokio::time::sleep(std::time::Duration::from_secs(1));
+tokio::pin!(sleep);
+
+loop {
+    sleep.as_mut().await;
+    println!("一秒到了");
+    sleep.as_mut().reset(tokio::time::Instant::now()
+        + std::time::Duration::from_secs(1));
+}
+```
+
+### `select!` 大致展开成什么？
+
+宏展开后的真实代码还包含内部枚举、位掩码和生命周期处理，下面只保留核心逻辑，帮助理解它做了什么：
+
+```rust
+// 原代码：
+tokio::select! {
+    value = future_a() => { handle_a(value) }
+    _ = future_b() => { handle_b() }
+}
+
+// 可以粗略理解成：
+let mut a = future_a();
+let mut b = future_b();
+
+let selected = poll_fn(|cx| {
+    // 实际实现默认会随机决定从哪个分支开始检查；biased; 时从第一个开始。
+    match poll(&mut a, cx) {
+        Poll::Ready(value) => Poll::Ready(Branch::A(value)),
+        Poll::Pending => {}
+    }
+
+    match poll(&mut b, cx) {
+        Poll::Ready(()) => Poll::Ready(Branch::B),
+        Poll::Pending => {}
+    }
+
+    Poll::Pending
+}).await;
+
+match selected {
+    Branch::A(value) => handle_a(value),
+    Branch::B => handle_b(),
+}
+```
+
+这里的 `poll(&mut a, cx)` 只是示意。真实的 `poll` 需要 `Pin<&mut Future>`，并且 Future 返回 `Pending` 时会注册 waker，让运行时在之后有进展时再次唤醒当前任务。
+
+带守卫和模式的分支还会多两步：
+
+1. 先计算 `if` 条件。条件为 `false` 时，这个分支不会被 poll。
+2. Future 返回值后再检查模式。模式不匹配时，当前分支暂时禁用，继续检查其他分支。
+
+因此，`select!` 是在**当前任务**中并发等待多个 Future，并不自动创建多个线程；没有 `spawn` 时，它们是并发而不是并行。
 
 ## 10.7 取消安全与公平性
 

@@ -437,7 +437,48 @@ Owner：哪个 actor/crate 拥有权威状态？
 
 ---
 
-## 10. 继续深入的分流
+## 10. 从一个 prompt 还原 trace timeline
+
+### Rust 目标
+
+理解 `tracing` span、`Instrument`、task-local context、JSONL、non-blocking writer 和 OTel exporter 的边界；区分“代码执行了”和“诊断信号已经 flush”。
+
+### Agent 目标
+
+用 `session_id`、`prompt_id`、`turn_number`、`tool_call_id` 和 `traceparent` 把一条消息从 Pager queue 追到 SessionActor、Sampler、ToolBridge、persistence 和完成响应。
+
+### 源码入口
+
+- [observability-and-trace-timeline.md](./deep-dives/observability-and-trace-timeline.md)
+- `crates/codegen/xai-grok-telemetry/src/{session_ctx,unified_log,debug_log,instrumentation}.rs`
+- `crates/codegen/xai-grok-telemetry/src/otel_layer/` 和 `src/external/`
+- `crates/codegen/xai-file-utils/src/trace_context.rs`
+- `crates/common/xai-tracing/src/tokio.rs`
+
+### 操作
+
+```sh
+rg -n "session_id|prompt_id|tool_call_id|traceparent|flush|shutdown" \
+  crates/codegen/xai-grok-shell/src/session crates/codegen/xai-grok-telemetry/src
+git diff --check
+```
+
+不要为了读文档运行全量构建。若后续真的修改 Rust，先选 `unified_log`、`debug_log`、`trace_context` 或 external redaction 对应的 focused fixture。
+
+### 完成证据
+
+写一份脱敏 timeline，至少包含：
+
+```text
+Pager queue -> ACP Prompt -> SessionActor admission
+  -> handle_prompt -> ChatState/persist ack
+  -> sampler attempt/traceparent -> tool_call_id loop
+  -> final stop reason -> durable completion -> flush/export
+```
+
+对每个箭头注明 owner、channel、关联字段和一个失败分叉。最后解释为什么“UI 已显示答案”不能证明 persistence 或 OTLP 已成功。
+
+## 11. 继续深入的分流
 
 完成实验 0–10 后按兴趣选择：
 

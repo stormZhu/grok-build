@@ -329,7 +329,52 @@ producer -> serde/wire -> transport -> old client/file
 
 一条好的说明会明确写“没有构建，因为本次只改 Markdown”或“运行了目标 crate 测试，因为改了 Rust 的 retry 分类”，而不是笼统地说“已验证”。
 
-## 11. 配置专项：让一个 feature gate 可解释、可刷新
+## 11. 项目 8：补一条可观测性信号并证明隐私边界
+
+### 目标
+
+选择一个真实但缺少诊断证据的阶段，例如 ACP prompt admission、sampler retry、tool completion、startup phase 或 unified-log flush。补充最小结构化信号，让贡献者能从 `session_id`/`prompt_id`/`tool_call_id` 还原状态转移，同时不把 prompt、参数或 token 写入日志。
+
+### 推荐入口
+
+- [observability-and-trace-timeline.md](./deep-dives/observability-and-trace-timeline.md)
+- `crates/codegen/xai-grok-telemetry/src/unified_log.rs`
+- `crates/codegen/xai-grok-telemetry/src/debug_log.rs`
+- `crates/codegen/xai-grok-telemetry/src/otel_layer/redact.rs`
+- `crates/codegen/xai-grok-telemetry/src/external/{schema,emit,redact}.rs`
+- `crates/codegen/xai-file-utils/src/trace_context.rs`
+
+### 先画 sink 图
+
+```text
+call site
+  -> tracing span/event ------> debug / instrumentation / internal OTLP
+  -> unified_log ------------- > unified.jsonl / ACP forward / snapshot
+  -> typed TelemetryEvent ----> product sink + optional external OTEL
+```
+
+明确这条信号的 owner、过滤器、文件路径、flush 屏障和 privacy gate。不要为了“更容易搜到”同时复制到所有 sink。
+
+### 最小交付
+
+1. 记录 ID、分类、耗时或计数，不记录完整内容；
+2. 若跨 Tokio task，保留当前 span 或建立命名 child span；
+3. 若跨 ACP/HTTP，补 `traceparent` round-trip fixture；
+4. 若是 external OTEL，补 schema allowlist、content gate 和 secret canary；
+5. 覆盖 success、cancel、timeout、error 和 process-exit flush 至少一条失败路径；
+6. 在变更说明中写清“这条日志证明了哪一层”，以及仍未覆盖的真实网络/TUI 风险。
+
+### 完成门槛
+
+不能只证明“日志函数被调用”。必须同时证明：
+
+- 关联字段能把事件放回正确 session/turn；
+- 异步 task 或跨进程边界没有丢 trace context；
+- redaction/exporter 对一个带 secret 的 canary 是 drop 或 `[REDACTED]`；
+- 没有无界增长的 writer、buffer 或 metric cardinality；
+- 只改 Markdown 时不构建；改 Rust 时只运行 owner 对应的 focused 验证。
+
+## 12. 配置专项：让一个 feature gate 可解释、可刷新
 
 ### 目标
 
@@ -356,7 +401,7 @@ producer -> serde/wire -> transport -> old client/file
 
 用一个最小报告说明：为什么某个看似更高的来源不能覆盖它，为什么当前 session 仍可能使用旧 snapshot，以及如何通过 `Resolved<T>::source` 或 warning 定位。
 
-## 12. 推荐顺序和暂停点
+## 13. 推荐顺序和暂停点
 
 ```text
 项目 0 文档导航
@@ -367,6 +412,7 @@ producer -> serde/wire -> transport -> old client/file
   -> 项目 5 Session/Replay
   -> 项目 6 Protocol/Leader/MCP
   -> 项目 7 Extension/Memory/Auth
+  -> 项目 8 Observability/Privacy
 ```
 
 每完成一层就暂停，回到 [12-glossary.md](./12-glossary.md) 更新自己的 owner 词汇表，并把源码路径、测试名和证据写进记录。若某项目需要猜测隐藏状态、真实 API key 或无界人工手测，先退回上一层补一个 deterministic fixture。

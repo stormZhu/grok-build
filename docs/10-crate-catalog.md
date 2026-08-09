@@ -189,6 +189,8 @@ cargo tree -p xai-grok-shell --depth 1
 | `xai-tracing-macros` | `crates/codegen/xai-tracing-macros` | `timed` / `tprintln` 等过程宏 | `src/lib.rs` |
 | `xai-circuit-breaker` | `crates/common/xai-circuit-breaker` | 失败熔断和恢复窗口 | `src/lib.rs` |
 
+可观测性专题的最短源码路径是：`xai-grok-telemetry/{session_ctx,unified_log,debug_log,instrumentation,otel_layer,external}`，再接 `xai-file-utils/src/trace_context.rs` 和 `xai-tracing/src/tokio.rs`。这些模块分别拥有上下文、落盘、路由、耗时、导出、脱敏和跨 task/协议传播，不要把它们当成一个“大日志模块”。
+
 ### 事件的三种用途
 
 ```text

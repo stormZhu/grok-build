@@ -233,4 +233,5 @@
 - [源码精读：认证与模型选择](./deep-dives/authentication-and-model-resolution.md)
 - [源码精读：配置加载与运行时解析](./deep-dives/configuration-and-runtime-resolution.md)
 - [源码精读：子代理与 Workflow](./deep-dives/subagents-and-workflows.md)
+- [源码精读：可观测性与 Trace Timeline](./deep-dives/observability-and-trace-timeline.md)
 - [源码精读：贡献者工作流](./deep-dives/contributor-workflow.md)

@@ -30,7 +30,7 @@
 | [11-guided-exercises.md](./11-guided-exercises.md) | Rust 与 Agent 结合的源码实验：从 Actor、Prompt、Tool 到真实 turn 测试 |
 | [12-glossary.md](./12-glossary.md) | Rust、Agent、Prompt、协议、安全与项目 owner 的统一术语索引 |
 | [13-contribution-projects.md](./13-contribution-projects.md) | 从低风险文档/纯函数到 Tool、Session、协议、认证和扩展的阶段化贡献项目 |
-| [源码精读](./deep-dives/README.md) | 针对具体函数、控制流和子系统的专题阅读；包含完整消息流、采样、认证与模型选择、配置分层/运行时解析、工具调用、MCP 生命周期/dispatcher、Leader、子代理/Workflow、权限沙箱、Workspace rewind/worktree、扩展生命周期、Pager 渲染与持久化重放 |
+| [源码精读](./deep-dives/README.md) | 针对具体函数、控制流和子系统的专题阅读；包含完整消息流、采样、认证与模型选择、配置分层/运行时解析、工具调用、MCP 生命周期/dispatcher、Leader、子代理/Workflow、权限沙箱、Workspace rewind/worktree、扩展生命周期、Pager 渲染、持久化重放和可观测性时间线 |
 
 ---
 
@@ -65,7 +65,8 @@
 21. **源码精读 / mcp-dispatcher** — 理解 50ms 事件合并、client identity、防 stale close、ACP status 和自动恢复
 22. **源码精读 / configuration-and-runtime-resolution** — 理解配置层级、深度合并、requirements/MDM、campaign、远端 settings 和热刷新
 23. **源码精读 / workspace-state-and-worktree-lifecycle** — 理解文件快照、FS/git/hunk rewind、checkpoint durability 和 worktree 隔离
-24. **源码精读 / contributor-workflow** — 学会按 owner 选测试、收集异步/协议证据并写出可审查改动
+24. **源码精读 / observability-and-trace-timeline** — 学会用关联 ID、span、unified log、firehose 和 OTLP 还原一次消息
+25. **源码精读 / contributor-workflow** — 学会按 owner 选测试、收集异步/协议证据并写出可审查改动
 
 ---
 
