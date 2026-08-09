@@ -21,7 +21,7 @@ tokio::spawn(async move {
 });
 ```
 
-这里的同步 `Mutex` guard 只用于同步代码。**绝不要在 guard 仍存活时 `.await`**；异步锁或快照的正确用法见 15。
+这里的同步 `Mutex` guard 只用于同步代码。强默认是让它在 `.await` 前释放：跨 await 可能阻塞 runtime 线程、让 future 失去 `Send` 或形成死锁。异步锁何时可以有意跨 await、何时应取 snapshot，见 15。
 
 ## 14.2 clone 模式
 
@@ -90,3 +90,5 @@ async fn get_entry(session_id: &str, terminal_id: &str) -> Option<Arc<TerminalEn
     registry().lock().await.get(&key).cloned()
 }
 ```
+
+完成标准：能把 `Arc` 的共享所有权与锁的可变访问分开解释，并指出一个返回 `Arc` snapshot 的临界区在哪里结束。更复杂的选型、死锁和取消问题继续阅读 [15](./15-interior-mutability-and-locks.md)。

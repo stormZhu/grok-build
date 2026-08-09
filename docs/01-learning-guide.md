@@ -75,7 +75,7 @@
 | `Arc` | 多个异步任务共享只读或同步访问的数据 |
 | feature | 编译期开关；阅读 `Cargo.toml` 时注意 `default` 与可选依赖 |
 
-推荐顺序：先掌握 Rust Book 的 ownership、`Result`、trait、async 基础，再阅读本仓库的 Actor 代码。遇到生命周期或泛型很复杂的实现时，先理解它的输入、输出和职责，不必立刻逐字符推导类型。
+推荐顺序：先通过 [Rust 必备知识](./rust-essentials/README.md) 的能力自测找到短板，掌握 ownership、`Result`、trait、async 基础，再阅读本仓库的 Actor 代码。遇到生命周期或泛型很复杂的实现时，先理解它的输入、输出和职责，不必立刻逐字符推导类型。
 
 ### 2.2 先认识几个词
 

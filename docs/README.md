@@ -19,6 +19,7 @@
 | 文档 | 内容 |
 |------|------|
 | [参考资料.md](./参考资料.md) | 外部学习资料与仓库内部阅读入口 |
+| [Rust 必备知识](./rust-essentials/README.md) | 面向本仓库的 Rust 课程：能力自测、语言专题、异步并发、语法解码、API 导航与 8 关源码实验 |
 | [01-learning-guide.md](./01-learning-guide.md) | 学习路径：编译、语言栈、核心概念、推荐阅读顺序 |
 | [02-architecture.md](./02-architecture.md) | 整体架构、分层、crate 地图、进程/入口模型 |
 | [03-agent-loop.md](./03-agent-loop.md) | Agent Loop：SessionActor、Turn、工具执行、生命周期钩子 |
@@ -43,6 +44,8 @@
 ---
 
 ## 建议阅读顺序
+
+Rust 基础薄弱或尚不能独立解释仓库中的组合类型、trait 和异步任务边界时，先读第 1 项，再按 [Rust 必备知识](./rust-essentials/README.md) 的自测结果穿插学习；不需要读完全部专题才回到架构主线。
 
 1. **01 学习指南** — 先能编译、能定位入口
 2. **02 架构** — 建立分层心智模型

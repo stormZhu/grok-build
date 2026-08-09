@@ -331,3 +331,26 @@ match selected {
 未选中的分支 future 会被丢弃，因此每个分支都应是取消安全的，或在下次进入循环后能正确恢复。读取一次消息、推进一次流或修改外部状态的 future 若在 poll 中途被丢弃，可能造成丢事件或重复操作；优先把状态保存在 loop 外，或使用明确记录进度的 API。
 
 `biased;` 不是性能开关，而是调度策略。高频且排在前面的就绪分支可能饿死后面的分支；只有存在明确优先级时使用，并将关闭/取消等必须及时响应的分支放在合适位置。
+
+## 10.8 可运行实验
+
+先读源码并预测输出，再分别运行。三个程序使用暂停时钟，验证语义时不会等待真实时间。
+
+```sh
+cargo run --locked --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml --bin select_race
+cargo run --locked --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml --bin select_loop
+cargo run --locked --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml --bin select_cancel_drop
+```
+
+- [`select_race`](./labs/async-demos/src/bin/select_race.rs)：确认较早 timer 获胜，同时两个分支的局部 guard 最终都会 drop。
+- [`select_loop`](./labs/async-demos/src/bin/select_loop.rs)：观察 queued message、一次 timeout、delayed message 和 channel close；timer 完成后由 `if` guard 禁用。
+- [`select_cancel_drop`](./labs/async-demos/src/bin/select_cancel_drop.rs)：区分 Future 内部 RAII cleanup 与已经发生、不会自动回滚的外部副作用。
+
+## 阅读练习
+
+1. 打开 [`run_loop.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs)，为每个 `select!` 分支填写：等待的 Future、返回类型、模式不匹配行为、其他分支获胜时是否可安全取消、channel 关闭时如何退出。
+2. 选择一个带 `if` guard 的 timer 分支，分别推演 guard 为 false、timer pending、timer ready 三种情况；说明 guard 表达式何时求值。
+3. 找出 `biased;` 后排在最前和最后的常就绪分支，判断是否可能饥饿；结论必须引用分支的实际 ready 条件，不能只看排列。
+4. 选一个循环外保存的 Future/receiver，假设把它移进 loop 重建，说明会丢失进度、重置 deadline，还是保持同等语义。
+
+完成标准：能把一个真实 `select!` 还原成“构造 Future、计算 guard、poll、匹配结果、drop 未获胜分支”的状态表，并为每个关闭与取消路径指出最终 owner。
