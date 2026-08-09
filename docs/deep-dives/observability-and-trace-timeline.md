@@ -763,6 +763,16 @@ call site discipline
 
 ### 12.4 推荐 focused tests
 
+先运行 [`mini_trace_timeline.rs`](../rust-essentials/labs/async-demos/src/bin/mini_trace_timeline.rs)：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_trace_timeline
+```
+
+程序直接证明 Tokio task-local 不会随裸 `spawn` 自动传播，显式 scope 后 `session_id`/`prompt_id` 与 `traceparent` 可进入 child，同时 `request_id` 和 `tool_call_id` 保持各自作用域；简化 external exporter 对非 allowlist 字符串默认拒绝。它不替代真实 tracing subscriber、W3C parser、JSONL writer、OTLP exporter 或 flush 测试。
+
 | 改动 | 最小测试 |
 |---|---|
 | span 字段/路由 | `debug_log` 的 session routing fixture，确认 inside/outside 文件分离 |

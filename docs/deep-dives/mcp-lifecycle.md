@@ -285,6 +285,16 @@ config resolved
 
 ## 13. 源码练习和测试
 
+先运行 [`mini_mcp_singleflight.rs`](../rust-essentials/labs/async-demos/src/bin/mini_mcp_singleflight.rs)：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_mcp_singleflight
+```
+
+程序用 `Notify` 固定两个并发 caller 的顺序，断言只有一个 handshake owner；abort owner 后 RAII guard 恢复 `Pending`，下一 caller 可重试；同名 server 的旧 `client_id` close 不会删除替代 client。它不模拟真实 stdio/HTTP transport、握手 timeout、OAuth、工具分页或 dispatcher 的 50ms 合并窗口。
+
 先做只读练习，不需要启动真实 MCP server：
 
 1. 用 `validate_tool_name` 写出 5 个合法/非法名字，并解释为什么跨供应商取交集；

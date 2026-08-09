@@ -397,6 +397,16 @@ definition / override pure test
 
 ## 8. 源码实验：不接真实模型也能完成
 
+先运行 [`mini_workflow_replay.rs`](../rust-essentials/labs/async-demos/src/bin/mini_workflow_replay.rs)：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_workflow_replay
+```
+
+程序断言首次 host call 执行并记录、相同 sequence/kind/hash 直接 replay 且不重复副作用、参数漂移产生 divergence、非密集 sequence 被拒绝，以及失败 reservation 不改变预算。缩小版用 FNV-1a 内存哈希；生产 journal 使用 SHA-256、JSONL 上限/安全加载、torn-tail 恢复和 tracker reconcile。
+
 1. 选 `explore` definition，调用 `resolve_agent_definition`，验证 read/search 工具存在而 execute/task 被 capability/depth policy 移除。
 2. 构造含 `System → User → Reasoning → Assistant → ToolResult` 的 conversation，调用 `normalize_forked_context`，观察最近三轮 verbatim、早期摘要和被删除的 `<git_status>`。
 3. 用 `xai-workflow::validate_script` 运行一个只调用 `complete` 的脚本，再把同一个 `agent()` host call 的参数改掉，观察 journal hash 为什么拒绝 replay。

@@ -268,6 +268,16 @@ recovery decision（skipped / adopted disk token / refreshed / terminal）
 
 ## 8. 测试和贡献检查表
 
+先运行 [`mini_auth_model_boundary.rs`](../rust-essentials/labs/async-demos/src/bin/mini_auth_model_boundary.rs)，预测五组 auth gate 和三条 401 路径的结果：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_auth_model_boundary
+```
+
+程序固定 alias/display/wire model 的区别、`Unknown` 只对第一方 endpoint 保守放行、第三方 BYOK 不调用 Session refresh、单 Turn 只消费一次恢复机会，以及 `Secret` 的脱敏 `Debug`。它不实现 provider/OIDC 刷新、多进程 `auth.json` 锁或 catalog merge；这些必须由下表对应 owner 的 fixture 证明。
+
 | 改动 | 最小验证面 |
 |---|---|
 | 模型字段/合并优先级 | `agent/config.rs` 的 `resolve_model_list` 与 `sampling_config_for_model` tests |

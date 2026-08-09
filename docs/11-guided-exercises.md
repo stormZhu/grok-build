@@ -404,6 +404,9 @@ rg -n "should_prune|soft_trim|hard_clear|context_window|MAX_REQUEST_BYTES" \
 ### 操作
 
 ```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_workflow_replay
 cargo test -p xai-grok-shell -- --list | rg -i 'sampling|session|tool|acp|headless'
 cargo test -p xai-grok-shell test_sampling_client
 cargo test -p xai-grok-pager-pty-harness -- --list
@@ -481,6 +484,9 @@ Owner：哪个 actor/crate 拥有权威状态？
 ### 操作
 
 ```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_trace_timeline
 rg -n "session_id|prompt_id|tool_call_id|traceparent|flush|shutdown" \
   crates/codegen/xai-grok-shell/src/session crates/codegen/xai-grok-telemetry/src
 git diff --check
@@ -505,7 +511,7 @@ Pager queue -> ACP Prompt -> SessionActor admission
 
 完成实验 0–10 后按兴趣选择：
 
-进入 Workspace 或配置源码前，分别运行 [`mini_workspace_rewind`](./rust-essentials/labs/async-demos/src/bin/mini_workspace_rewind.rs) 和 [`mini_config_resolution`](./rust-essentials/labs/async-demos/src/bin/mini_config_resolution.rs)。先写下权限/快照或来源/优先级的预测，再用下面的专题解释生产实现多出的路径、策略和持久化边界。
+进入 Workspace、配置/认证、MCP 或 Workflow 源码前，分别运行 [`mini_workspace_rewind`](./rust-essentials/labs/async-demos/src/bin/mini_workspace_rewind.rs)、[`mini_config_resolution`](./rust-essentials/labs/async-demos/src/bin/mini_config_resolution.rs)、[`mini_auth_model_boundary`](./rust-essentials/labs/async-demos/src/bin/mini_auth_model_boundary.rs)、[`mini_mcp_singleflight`](./rust-essentials/labs/async-demos/src/bin/mini_mcp_singleflight.rs) 和 [`mini_workflow_replay`](./rust-essentials/labs/async-demos/src/bin/mini_workflow_replay.rs)。先写下状态/优先级/并发结果的预测，再用下面的专题解释生产实现多出的路径、策略和持久化边界。
 
 | 方向 | 下一篇/下一组源码 |
 |---|---|

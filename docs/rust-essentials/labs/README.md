@@ -52,6 +52,10 @@ cargo run --locked \
 | [`mini_context_compaction`](./async-demos/src/bin/mini_context_compaction.rs) | pruning 后权威 history 是否变化？窗口缩小会不会触发 compact？ | request clone 与 ChatState、85% 阈值、full-replace 后的摘要/原目标/reminder |
 | [`mini_workspace_rewind`](./async-demos/src/bin/mini_workspace_rewind.rs) | 同轮两次写入保留哪个 before？外部修改或恢复写失败后 checkpoint 怎样变化？ | 修改前权限、before/after snapshot、冲突仍写回，以及成功后才 truncate |
 | [`mini_config_resolution`](./async-demos/src/bin/mini_config_resolution.rs) | nested object、数组、类型冲突怎样 merge？刷新后旧 Session 会变吗？ | 深度合并、带 `ConfigSource` 的优先级、requirement pin 和 Session snapshot |
+| [`mini_auth_model_boundary`](./async-demos/src/bin/mini_auth_model_boundary.rs) | alias、显示名和 wire model 哪个进入请求？第三方 401 会不会刷新 Session token？ | endpoint/BYOK gate、单 Turn 恢复预算、SamplerConfig 重建和 secret 脱敏 |
+| [`mini_mcp_singleflight`](./async-demos/src/bin/mini_mcp_singleflight.rs) | 两个 caller 会握手几次？holder 被取消后状态是什么？旧 client 的 close 会删除替代者吗？ | 单一 handshake owner、RAII 恢复 `Pending`、waiter 唤醒和 `client_id` 防陈旧事件 |
+| [`mini_workflow_replay`](./async-demos/src/bin/mini_workflow_replay.rs) | 相同 host call 恢复时会不会再次产生副作用？参数变化和预算超限怎样失败？ | 密集 journal sequence、request hash、divergence 和原子 reservation |
+| [`mini_trace_timeline`](./async-demos/src/bin/mini_trace_timeline.rs) | 裸 `spawn` 会继承 task-local 吗？哪些 ID 能串起 prompt、request 和 tool？ | 显式上下文传播、traceparent、关联键作用域和字符串字段默认拒绝 |
 | [`spawn_local_rc`](./async-demos/src/bin/spawn_local_rc.rs) | `Rc<RefCell<_>>` 为什么不能交给普通 `spawn`，这里却能共享？ | current-thread runtime 仍需 `LocalSet`；不依赖两个 task 的偶然调度顺序 |
 | [`timer_reset`](./async-demos/src/bin/timer_reset.rs) | 一个 `Sleep` 完成后怎样再次等待新 deadline？ | 循环外创建、`tokio::pin!`、`.as_mut()` 重借用和 `reset()` |
 | [`mutex_snapshot`](./async-demos/src/bin/mutex_snapshot.rs) | reader 停在第二个 `.await` 时，另一个 task 能否立刻取锁？ | 在小作用域内复制 owned snapshot，让 `MutexGuard` 在 await 前释放 |
@@ -60,7 +64,7 @@ cargo run --locked \
 
 ## 一键校验
 
-下面的命令会运行全部正常 Katas、确认六个反例按预期编译失败，并逐个运行十六个 async demos：
+下面的命令会运行全部正常 Katas、确认六个反例按预期编译失败，并逐个运行二十个 async demos：
 
 ```sh
 docs/rust-essentials/labs/check.sh

@@ -47,6 +47,10 @@ async_demos=(
     mini_context_compaction
     mini_workspace_rewind
     mini_config_resolution
+    mini_auth_model_boundary
+    mini_mcp_singleflight
+    mini_workflow_replay
+    mini_trace_timeline
     spawn_local_rc
     timer_reset
     mutex_snapshot
