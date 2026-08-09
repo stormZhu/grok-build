@@ -269,6 +269,8 @@ Session 通过 `SessionCommand`（`session/commands.rs`）接收：
 | `ControlCommand` / `ControlPayload` | 控制消息 |
 | 版本 | `leader_is_older_than` 防偏斜 |
 
+多客户端注册、请求 ID 命名空间、socket/lock 竞争和断线重连的完整控制流见 [源码精读：Leader 控制面](./deep-dives/leader-control-plane.md)。
+
 用途：多 TUI / 工具共享同一 agent 后端、减少重复进程。
 
 ---
@@ -304,6 +306,8 @@ Plan mode 的 edit gate 在 Session 层额外强化。
 | External auth | 可插拔 refresher |
 
 Session 侧：`session_token_auth_gate` 决定是否允许用 session token 刷新（防 BYOK 第三方向量泄漏）。
+
+模型目录合并、凭据解析、endpoint 安全边界和 turn 级 401 恢复的源码链路见 [源码精读：认证与模型选择](./deep-dives/authentication-and-model-resolution.md)。
 
 ---
 

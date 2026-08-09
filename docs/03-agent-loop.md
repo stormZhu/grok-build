@@ -231,6 +231,8 @@ Session 在 `handle_prompt` 边界调用，保证扩展可观察但不可劫持�
 
 `xai-grok-hooks` + session `hooks_plugins`：在 tool 前后跑用户配置的 shell/脚本，可 deny。
 
+扩展不共享一种控制模型：进程内 lifecycle contributor、外部 hook、plugin asset、skill 和 memory 分别在不同边界接入。完整的 owner、trust、hook gate 与 memory 注入链路见 [源码精读：扩展与生命周期](./deep-dives/extensions-and-lifecycle.md)。
+
 ---
 
 ## 7. Subagent 与并行

@@ -28,7 +28,9 @@
 | [09-contributor-playbook.md](./09-contributor-playbook.md) | 开发实战：按改动类型定位、测试、调试、兼容性与代码审查 |
 | [10-crate-catalog.md](./10-crate-catalog.md) | 依据 workspace metadata 的全 crate 目录、功能反查与贡献者导航 |
 | [11-guided-exercises.md](./11-guided-exercises.md) | Rust 与 Agent 结合的源码实验：从 Actor、Prompt、Tool 到真实 turn 测试 |
-| [源码精读](./deep-dives/README.md) | 针对具体函数、控制流和子系统的专题阅读；包含完整消息流、采样、工具调用、MCP、权限沙箱、Pager 渲染与持久化重放 |
+| [12-glossary.md](./12-glossary.md) | Rust、Agent、Prompt、协议、安全与项目 owner 的统一术语索引 |
+| [13-contribution-projects.md](./13-contribution-projects.md) | 从低风险文档/纯函数到 Tool、Session、协议、认证和扩展的阶段化贡献项目 |
+| [源码精读](./deep-dives/README.md) | 针对具体函数、控制流和子系统的专题阅读；包含完整消息流、采样、认证与模型选择、工具调用、MCP、Leader、权限沙箱、扩展生命周期、Pager 渲染与持久化重放 |
 
 ---
 
@@ -50,11 +52,16 @@
 8. **09 开发者实战手册** — 以一个可验证的小改动开始真正动手
 9. **10 Crate 全目录** — 从 workspace package 反查职责、入口和验证命令
 10. **11 源码实验手册** — 把 Rust 概念和 Agent 运行时练习连起来
-11. **源码精读 / message-flow** — 跟踪用户发送一条消息后的完整控制流
-12. **源码精读 / persistence-and-replay** — 理解 session 落盘、恢复、重放、rewind 和 fork
-13. **源码精读 / sampling-lifecycle** — 理解请求构建、流事件、重试与采样后如何接回工具循环
-14. **源码精读 / prompt-assembly** — 理解 Agent 定义、规则、skills 如何进入模型上下文
-15. **源码精读 / contributor-workflow** — 学会按 owner 选测试、收集异步/协议证据并写出可审查改动
+11. **12 术语索引** — 遇到陌生词时先确认 Rust、Agent 和项目语义的对应关系
+12. **13 阶段化贡献项目** — 按风险递进完成从文档、纯函数到协议和跨 session 改动
+13. **源码精读 / message-flow** — 跟踪用户发送一条消息后的完整控制流
+14. **源码精读 / persistence-and-replay** — 理解 session 落盘、恢复、重放、rewind 和 fork
+15. **源码精读 / sampling-lifecycle** — 理解请求构建、流事件、重试与采样后如何接回工具循环
+16. **源码精读 / prompt-assembly** — 理解 Agent 定义、规则、skills 如何进入模型上下文
+17. **源码精读 / extensions-and-lifecycle** — 区分 hooks、plugins、skills、memory 与进程内 lifecycle 扩展的控制边界
+18. **源码精读 / leader-control-plane** — 理解多客户端如何共享 Agent Host，以及 IPC/版本/重连的边界
+19. **源码精读 / authentication-and-model-resolution** — 理解模型目录、凭据来源和 401 恢复为什么分层
+20. **源码精读 / contributor-workflow** — 学会按 owner 选测试、收集异步/协议证据并写出可审查改动
 
 ---
 

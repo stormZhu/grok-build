@@ -4,7 +4,7 @@
 
 > 公开仓库当前不接收外部 PR，权威说明见 [CONTRIBUTING.md](../CONTRIBUTING.md)。这里的“贡献”指在获授权的开发流程、下游 fork 或本地实验中产出可审查的改动；即便不能直接提交 PR，这套方法仍适用于提高质量 issue、复现报告和补丁建议。
 
-架构总览见 [02-architecture.md](./02-architecture.md)，关键源码索引见 [07-module-map.md](./07-module-map.md)。如果你的改动涉及模型调用工具，先读 [Tool Call 精读](./deep-dives/tool-call-pipeline.md)。
+架构总览见 [02-architecture.md](./02-architecture.md)，关键源码索引见 [07-module-map.md](./07-module-map.md)。如果你的改动涉及模型调用工具，先读 [Tool Call 精读](./deep-dives/tool-call-pipeline.md)。如果还没有选定第一个改动，按 [13-contribution-projects.md](./13-contribution-projects.md) 从低风险项目开始。
 
 ---
 

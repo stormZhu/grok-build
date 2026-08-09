@@ -8,7 +8,7 @@
 - **操作**：尽量使用现有测试和命令；
 - **完成证据**：怎样证明自己真的理解，而不是只看过代码。
 
-建议按顺序完成 0→10。每个实验都可以在不接入真实模型、不使用真实 API key 的情况下完成。
+建议先浏览 [12-glossary.md](./12-glossary.md) 的总体关系图和 owner 速查，再按顺序完成 0→10。每个实验都可以在不接入真实模型、不使用真实 API key 的情况下完成。
 
 ---
 
@@ -46,6 +46,8 @@ cargo tree -p xai-grok-tools --depth 1
 1. 为什么 `xai-grok-sampling-types` 不应该依赖 `xai-grok-shell`？
 2. 为什么 `xai-grok-pager-bin` 是 composition root，而不是 Agent Loop？
 3. 为什么 `third_party/mermaid-to-svg` 不在普通工具调用的主闭包中？
+
+回到 [术语索引](./12-glossary.md)，把你画出的依赖链上的每个节点标成 `owner`、`wire type` 或 `derived cache`。如果一个节点无法归类，先检查它是否只是 adapter，而不是新的状态源。
 
 ---
 
@@ -450,3 +452,5 @@ Owner：哪个 actor/crate 拥有权威状态？
 | 开发与贡献实践 | [`contributor-workflow.md`](./deep-dives/contributor-workflow.md)、`xai-grok-test-support`、`xai-grok-shell/tests/` |
 
 目标不是背下 81 个 package，而是能从一个用户可见行为找到正确 owner，并用 Rust 类型、Agent 语义和测试证据解释这条路径。
+
+完成实验后，使用 [13-contribution-projects.md](./13-contribution-projects.md) 把理解转成一个有明确证据的实际改动；先从项目 0 或项目 1 开始，不要直接跳到 Session 主循环或协议迁移。
