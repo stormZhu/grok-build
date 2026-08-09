@@ -218,6 +218,18 @@ Leader 持有 Agent、Session、Workspace 和 relay；客户端只持有 socket 
                     └─ 否 -> 默认交互 TUI / 进程内 session
 ```
 
+## 可运行缩小实验
+
+[`mini_host_leader_routing.rs`](../rust-essentials/labs/async-demos/src/bin/mini_host_leader_routing.rs) 把 CLI 分流、Leader readiness 和多客户端 ID 路由放进同一个确定性模型：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_host_leader_routing
+```
+
+程序断言 `-p` 在 command/Leader 分流前提前返回，stdio/headless/Leader 分支遵守 auth 与 ready gate，registration/capabilities 保持 per-client，数字和字符串 JSON-RPC ID 经 namespace 后都能无损恢复，client disconnect 也不会删除 shared Session。缩小模型不模拟 lock、socket、进程清理和 reconnect；这些仍需用 Leader integration fixture 验证。
+
 ## 8. 开发与调试断点
 
 按问题选择最短源码路径：

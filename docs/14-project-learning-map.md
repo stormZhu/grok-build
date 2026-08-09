@@ -66,16 +66,21 @@ cargo run --locked \
 
 | 想解释的旅程 | 先读 | 主要源码 | 最小验证方向 |
 |---|---|---|---|
-| 用户按 Enter 后怎样启动 Turn | [`message-flow`](./deep-dives/message-flow.md)、[`run-session`](./deep-dives/run-session.md) | Pager action → `SessionCommand::Prompt` → `queue_input` → `handle_prompt` | `mini_session_actor` + Session focused test |
+| 用户按 Enter 后怎样完成整个 Turn | [`message-flow`](./deep-dives/message-flow.md)、[`run-session`](./deep-dives/run-session.md) | Pager action → Session queue → 两次 sampling/tool loop → completion | `mini_session_actor` + `mini_turn_end_to_end` + Session focused test |
 | 模型请求如何流式返回 | [`sampling-lifecycle`](./deep-dives/sampling-lifecycle.md) | `sampler_turn.rs`、`xai-grok-sampler` actor/stream/retry | `mini_sampler_retry` + sampler fixture，断言 attempt、事件数和终态 |
-| 一次工具调用怎样执行和写回 | [`tool-call-pipeline`](./deep-dives/tool-call-pipeline.md) | `tool_calls.rs`、`xai-tool-runtime`、ToolBridge | tool runtime integration test |
-| MCP server 怎样只初始化一次并安全替换 | [`mcp-lifecycle`](./deep-dives/mcp-lifecycle.md)、[`mcp-dispatcher`](./deep-dives/mcp-dispatcher.md) | `xai-grok-mcp/servers.rs`、`mcp_dispatcher.rs` | `mini_mcp_singleflight` + client state fixture |
-| 文件修改如何受权限保护并可恢复 | [`permissions-and-sandbox`](./deep-dives/permissions-and-sandbox.md)、[`workspace-state`](./deep-dives/workspace-state-and-worktree-lifecycle.md) | workspace permission/session/checkpoint | `mini_workspace_rewind` + temp workspace fixture |
-| 长会话怎样压缩和恢复 | [上下文管理](./04-context-management.md)、[`persistence-and-replay`](./deep-dives/persistence-and-replay.md) | ChatState、compaction、storage/jsonl | `mini_context_compaction` + 恢复后状态断言 |
+| 一次工具调用怎样执行和写回 | [`tool-call-pipeline`](./deep-dives/tool-call-pipeline.md) | `tool_calls.rs`、`xai-tool-runtime`、ToolBridge | `mini_tool_pipeline` + tool runtime integration test |
+| MCP server 怎样只初始化一次并安全替换 | [`mcp-lifecycle`](./deep-dives/mcp-lifecycle.md)、[`mcp-dispatcher`](./deep-dives/mcp-dispatcher.md) | `xai-grok-mcp/servers.rs`、`mcp_dispatcher.rs` | `mini_mcp_singleflight` + `mini_mcp_dispatch_window` + client fixture |
+| 文件修改如何受权限保护并可恢复 | [`permissions-and-sandbox`](./deep-dives/permissions-and-sandbox.md)、[`workspace-state`](./deep-dives/workspace-state-and-worktree-lifecycle.md) | workspace permission/session/checkpoint | `mini_permission_layers` + `mini_workspace_rewind` |
+| 长会话怎样压缩、落盘和崩溃恢复 | [上下文管理](./04-context-management.md)、[`persistence-and-replay`](./deep-dives/persistence-and-replay.md) | ChatState、compaction、storage/jsonl、persistence actor | `mini_context_compaction` + `mini_storage_recovery` + 恢复后状态断言 |
 | Cancel/Shutdown 怎样跨层收尾 | [`cancellation-and-shutdown`](./deep-dives/cancellation-and-shutdown.md) | `run_loop.rs`、Sampler、工具进程、workflow | oneshot/barrier + deadline |
-| UI 为什么显示或漏掉一条更新 | [`pager-rendering`](./deep-dives/pager-rendering.md) | ACP handler、ReplayBuffer、render blocks | reducer/render snapshot test |
+| UI 为什么显示或漏掉一条更新 | [`pager-rendering`](./deep-dives/pager-rendering.md) | ACP handler、ReplayBuffer、render blocks | `mini_pager_reducer` + reducer/render snapshot test |
 | 配置字段最终选了哪一份 | [`configuration-and-runtime-resolution`](./deep-dives/configuration-and-runtime-resolution.md) | ConfigLayers、runtime resolver、Session snapshot | `mini_config_resolution` + resolution table test |
+| system、首轮规则和动态 reminder 怎样装配 | [`prompt-assembly`](./deep-dives/prompt-assembly.md) | AgentBuilder、PromptContext、ToolBridge、ChatState | `mini_prompt_assembly` + prompt render fixture |
+| 工具依赖在 rebuild 后为何仍正确 | [`resources-and-capability-injection`](./deep-dives/resources-and-capability-injection.md) | ToolCallContext、Resources、registry finalize | `mini_capability_injection` + resource fixture |
+| hook、permission 和工具终态怎样保持边界 | [`extensions-and-lifecycle`](./deep-dives/extensions-and-lifecycle.md) | lifecycle registry、hook runner、tool dispatch | `mini_extension_lifecycle` + hook/permission fixture |
+| CLI 模式与多客户端请求怎样路由 | [`host-modes-and-entrypoints`](./deep-dives/host-modes-and-entrypoints.md)、[`leader-control-plane`](./deep-dives/leader-control-plane.md) | CLI dispatch、Leader registration、ID namespace | `mini_host_leader_routing` + Leader integration fixture |
 | 模型和凭据怎样安全进入请求 | [`authentication-and-model-resolution`](./deep-dives/authentication-and-model-resolution.md) | ModelsManager、auth gate、SamplerConfig、401 recovery | `mini_auth_model_boundary` + auth endpoint fixture |
+| fresh/fork/resume 子代理各拥有什么 | [`subagents-and-workflows`](./deep-dives/subagents-and-workflows.md) | subagent resolution/context、child session、worktree、coordinator | `mini_subagent_scope` + child session fixture |
 | Workflow 恢复为何不重复 child 副作用 | [`subagents-and-workflows`](./deep-dives/subagents-and-workflows.md) | `xai-workflow/journal.rs`、host service、budget tracker | `mini_workflow_replay` + journal fixture |
 | 一条消息怎样跨 task/HTTP 保持关联 | [`observability-and-trace-timeline`](./deep-dives/observability-and-trace-timeline.md) | session context、trace context、OTel redact | `mini_trace_timeline` + propagation/redact fixture |
 
@@ -112,15 +117,25 @@ cargo run --locked \
 | 先运行 | 再读生产源码 | 固定的不变量 |
 |---|---|---|
 | [`mini_session_actor`](./rust-essentials/labs/async-demos/src/bin/mini_session_actor.rs) | [`run-session`](./deep-dives/run-session.md) | mailbox、单一 running Turn、completion 回流 |
+| [`mini_turn_end_to_end`](./rust-essentials/labs/async-demos/src/bin/mini_turn_end_to_end.rs) | [`message-flow`](./deep-dives/message-flow.md) | 一 Turn 两次 sampling、tool join key 和四种确认边界 |
 | [`mini_tool_pipeline`](./rust-essentials/labs/async-demos/src/bin/mini_tool_pipeline.rs) | [`tool-call-pipeline`](./deep-dives/tool-call-pipeline.md) | JSON/强类型边界、权限、`Progress* -> Terminal` |
+| [`mini_permission_layers`](./rust-essentials/labs/async-demos/src/bin/mini_permission_layers.rs) | [`permissions-and-sandbox`](./deep-dives/permissions-and-sandbox.md) | semantic access、plan/manager/sandbox 三层和 Decision 终态 |
+| [`mini_pager_reducer`](./rust-essentials/labs/async-demos/src/bin/mini_pager_reducer.rs) | [`pager-rendering`](./deep-dives/pager-rendering.md) | stream/echo 合并、tool ID、orphan update、follow 与 finish |
 | [`mini_replay_order`](./rust-essentials/labs/async-demos/src/bin/mini_replay_order.rs) | [`persistence-and-replay`](./deep-dives/persistence-and-replay.md) | chunk 合并、非流式事件和 completion 前 flush |
+| [`mini_storage_recovery`](./rust-essentials/labs/async-demos/src/bin/mini_storage_recovery.rs) | [`persistence-and-replay`](./deep-dives/persistence-and-replay.md) | flush ack、commit classification、torn tail 和原子 snapshot |
 | [`mini_cancel_shutdown`](./rust-essentials/labs/async-demos/src/bin/mini_cancel_shutdown.rs) | [`cancellation-and-shutdown`](./deep-dives/cancellation-and-shutdown.md) | Cancel 结束 Turn；Shutdown 收回 Session 资源 |
 | [`mini_sampler_retry`](./rust-essentials/labs/async-demos/src/bin/mini_sampler_retry.rs) | [`sampling-lifecycle`](./deep-dives/sampling-lifecycle.md) | 一请求多 attempt、输出后 retry veto、Session 恢复边界 |
 | [`mini_context_compaction`](./rust-essentials/labs/async-demos/src/bin/mini_context_compaction.rs) | [上下文管理](./04-context-management.md) | request-only pruning 与权威 history full-replace |
 | [`mini_workspace_rewind`](./rust-essentials/labs/async-demos/src/bin/mini_workspace_rewind.rs) | [`workspace-state`](./deep-dives/workspace-state-and-worktree-lifecycle.md) | 修改前权限、before/after、冲突和 checkpoint truncate |
 | [`mini_config_resolution`](./rust-essentials/labs/async-demos/src/bin/mini_config_resolution.rs) | [`configuration-and-runtime-resolution`](./deep-dives/configuration-and-runtime-resolution.md) | 深度合并、来源优先级与 Session snapshot |
+| [`mini_prompt_assembly`](./rust-essentials/labs/async-demos/src/bin/mini_prompt_assembly.rs) | [`prompt-assembly`](./deep-dives/prompt-assembly.md) | 四层上下文、audience、registry 双输出与幂等规则注入 |
+| [`mini_capability_injection`](./rust-essentials/labs/async-demos/src/bin/mini_capability_injection.rs) | [`resources-and-capability-injection`](./deep-dives/resources-and-capability-injection.md) | rebuild 注入、共享 state、ephemeral call context 与缺资源失败 |
+| [`mini_extension_lifecycle`](./rust-essentials/labs/async-demos/src/bin/mini_extension_lifecycle.rs) | [`extensions-and-lifecycle`](./deep-dives/extensions-and-lifecycle.md) | contributor 顺序、hook/permission 双 gate 与单一 post 终态 |
+| [`mini_host_leader_routing`](./rust-essentials/labs/async-demos/src/bin/mini_host_leader_routing.rs) | [`host-modes-and-entrypoints`](./deep-dives/host-modes-and-entrypoints.md)、[`leader-control-plane`](./deep-dives/leader-control-plane.md) | 入口优先级、ready/auth、per-client capabilities 与 ID namespace |
 | [`mini_auth_model_boundary`](./rust-essentials/labs/async-demos/src/bin/mini_auth_model_boundary.rs) | [`authentication-and-model-resolution`](./deep-dives/authentication-and-model-resolution.md) | wire model、endpoint/BYOK gate、401 budget 和 secret 脱敏 |
 | [`mini_mcp_singleflight`](./rust-essentials/labs/async-demos/src/bin/mini_mcp_singleflight.rs) | [`mcp-lifecycle`](./deep-dives/mcp-lifecycle.md) | 单飞握手、取消恢复和陈旧 close 隔离 |
+| [`mini_mcp_dispatch_window`](./rust-essentials/labs/async-demos/src/bin/mini_mcp_dispatch_window.rs) | [`mcp-dispatcher`](./deep-dives/mcp-dispatcher.md) | 50ms 合并、close identity、stale eviction 与 transport recovery |
+| [`mini_subagent_scope`](./rust-essentials/labs/async-demos/src/bin/mini_subagent_scope.rs) | [`subagents-and-workflows`](./deep-dives/subagents-and-workflows.md) | fresh/fork/resume、独立 history、实际 cwd 与 owner cancel |
 | [`mini_workflow_replay`](./rust-essentials/labs/async-demos/src/bin/mini_workflow_replay.rs) | [`subagents-and-workflows`](./deep-dives/subagents-and-workflows.md) | journal sequence/hash、无副作用 replay 与预算 reservation |
 | [`mini_trace_timeline`](./rust-essentials/labs/async-demos/src/bin/mini_trace_timeline.rs) | [`observability-and-trace-timeline`](./deep-dives/observability-and-trace-timeline.md) | task context、关联键、traceparent 和默认拒绝导出 |
 

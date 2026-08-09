@@ -221,6 +221,14 @@ Leader 在更新或受控退出时会向已连 client 发布 shutdown reason。�
 
 Leader 的风险在边界和竞争，所以测试也要按不变量分层：
 
+先运行 [`mini_host_leader_routing.rs`](../rust-essentials/labs/async-demos/src/bin/mini_host_leader_routing.rs)，预测两个 client 使用相同原始 ID 后的内部 ID 和响应目标。它会确定性断言 ready gate、per-client capabilities、数字/字符串 ID round trip，以及 disconnect 不销毁 shared Session；随后再用本节 integration fixture 覆盖缩小模型没有模拟的 lock、socket、重连和真实进程所有权。
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_host_leader_routing
+```
+
 | 风险 | 最小证据 |
 |---|---|
 | lock/PID/zombie 决策 | `leader/mod.rs` 的纯函数测试：只驱逐严格旧版本、PID 改变重置计时、holder 不一致不驱逐 |

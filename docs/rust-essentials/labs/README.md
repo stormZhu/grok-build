@@ -45,15 +45,25 @@ cargo run --locked \
 | [`watch_latest`](./async-demos/src/bin/watch_latest.rs) | 连发 1、2、3 后慢 receiver 会读几次、读到什么？相同值会不会通知？ | watch 保存最新状态和版本，不保存事件队列；最后一个 sender drop 后关闭 |
 | [`actor_request_reply`](./async-demos/src/bin/actor_request_reply.rs) | command 和结果分别走哪条 channel？谁拥有累计状态？ | 有界 mpsc 传命令、oneshot 传一次回复、显式 shutdown 后 join actor |
 | [`mini_session_actor`](./async-demos/src/bin/mini_session_actor.rs) | 第二条较快的 Prompt 会不会越过第一条？第一条运行时 Actor 能否回答 Status？ | mailbox、输入队列、单一 running turn、completion 回流、`select!` 和 shutdown flush 如何组成 Session 骨架 |
+| [`mini_turn_end_to_end`](./async-demos/src/bin/mini_turn_end_to_end.rs) | 一轮带工具调用的 Turn 会采样几次？最后一段更新、RPC 回复、durable terminal 和下一条输入怎样排序？ | Pager/ChatState/Persistence/ReplayBuffer owner、`tool_call_id` 配对、四种确认边界和单次本地回显 |
 | [`mini_tool_pipeline`](./async-demos/src/bin/mini_tool_pipeline.rs) | JSON 参数在哪一层变回强类型？拒绝、缺 Terminal 和成功分别怎样呈现？ | prepare、权限、`Progress* -> Terminal`、UI/prompt 两份输出和 ChatState tool result |
+| [`mini_permission_layers`](./async-demos/src/bin/mini_permission_layers.rs) | plan、YOLO、managed deny 和 sandbox 同时存在时，哪一层拥有最终决定？ | ToolInput→AccessKind、Bash fail-closed、不同 Decision 终态、mode 互斥和内核 sandbox 第二道边界 |
+| [`mini_pager_reducer`](./async-demos/src/bin/mini_pager_reducer.rs) | 两段文本、交错 tool update、先到的 completion 和本地 echo 会生成几个 entry？ | stream 合并、稳定 EntryId、tool-call ID 配对、orphan update、follow mode 与 turn finish |
 | [`mini_replay_order`](./async-demos/src/bin/mini_replay_order.rs) | 两个文本 chunk、一个 tool event、尾部文本和 TurnCompleted 以什么顺序到客户端？ | 流式 chunk 合并、非流式事件强制 flush、completion 前 flush 尾部文本 |
+| [`mini_storage_recovery`](./async-demos/src/bin/mini_storage_recovery.rs) | channel send、flush ack、JSONL append 和 summary write 分别在哪一步算 committed？半行尾部怎样恢复？ | `NotCommitted`/`Committed`、torn-tail 隔离、原子 snapshot replace 和 updates 审计流 |
 | [`mini_cancel_shutdown`](./async-demos/src/bin/mini_cancel_shutdown.rs) | Cancel 后 Session 能否运行下一 Turn？Shutdown ack 前哪些 cleanup 必须完成？ | Turn 取消、RAII cleanup、Session 继续存活，以及 shutdown 对后台 workflow 的 join/flush 所有权 |
 | [`mini_sampler_retry`](./async-demos/src/bin/mini_sampler_retry.rs) | 无输出失败、半截输出、空响应和 401/context error 各会尝试几次？ | logical request/attempt 分离、只在输出前 retry、空响应分类，以及 Session 级恢复边界 |
 | [`mini_context_compaction`](./async-demos/src/bin/mini_context_compaction.rs) | pruning 后权威 history 是否变化？窗口缩小会不会触发 compact？ | request clone 与 ChatState、85% 阈值、full-replace 后的摘要/原目标/reminder |
 | [`mini_workspace_rewind`](./async-demos/src/bin/mini_workspace_rewind.rs) | 同轮两次写入保留哪个 before？外部修改或恢复写失败后 checkpoint 怎样变化？ | 修改前权限、before/after snapshot、冲突仍写回，以及成功后才 truncate |
 | [`mini_config_resolution`](./async-demos/src/bin/mini_config_resolution.rs) | nested object、数组、类型冲突怎样 merge？刷新后旧 Session 会变吗？ | 深度合并、带 `ConfigSource` 的优先级、requirement pin 和 Session snapshot |
+| [`mini_prompt_assembly`](./async-demos/src/bin/mini_prompt_assembly.rs) | extend/full、primary/subagent 和工具名覆盖分别会改变哪一层？重复恢复会不会再次注入规则？ | stable system、首轮 preamble、conversation、per-turn reminder 四层，以及 registry 对 prompt/schema 的双输出 |
+| [`mini_capability_injection`](./async-demos/src/bin/mini_capability_injection.rs) | toolset rebuild 后哪些资源必须重装？哪些状态应该保留？ | 类型化 Resources、`Params<T>`/`State<T>`、持久状态与单次调用 credential/cancellation 的边界 |
+| [`mini_extension_lifecycle`](./async-demos/src/bin/mini_extension_lifecycle.rs) | hook deny、runner failure、permission deny 和 tool failure 分别停在哪一站？ | contributor 顺序、hook fail-open、独立 permission gate，以及互斥的 success/failure post hook |
+| [`mini_host_leader_routing`](./async-demos/src/bin/mini_host_leader_routing.rs) | `-p`、command、Leader 怎样决定 host？两个 client 复用同一 JSON-RPC ID 会怎样？ | 入口优先级、ready/auth gate、per-client capabilities、ID namespace 与 shared Session 所有权 |
 | [`mini_auth_model_boundary`](./async-demos/src/bin/mini_auth_model_boundary.rs) | alias、显示名和 wire model 哪个进入请求？第三方 401 会不会刷新 Session token？ | endpoint/BYOK gate、单 Turn 恢复预算、SamplerConfig 重建和 secret 脱敏 |
 | [`mini_mcp_singleflight`](./async-demos/src/bin/mini_mcp_singleflight.rs) | 两个 caller 会握手几次？holder 被取消后状态是什么？旧 client 的 close 会删除替代者吗？ | 单一 handshake owner、RAII 恢复 `Pending`、waiter 唤醒和 `client_id` 防陈旧事件 |
+| [`mini_mcp_dispatch_window`](./async-demos/src/bin/mini_mcp_dispatch_window.rs) | 同一窗口的重复事件和多个 close ID 各保留什么？旧 close 会不会误杀 replacement？ | 50ms tumbling window、wire/identity 双视图、ConfigDiff fan-out、stale eviction 和 stdio/HTTP/auth 分流 |
+| [`mini_subagent_scope`](./async-demos/src/bin/mini_subagent_scope.rs) | fresh/fork/resume 各继承什么？父代理怎样取消 child 而不直接夺走其资源？ | 独立 history、固定 resume identity、worktree 实际结果、共享 permission manager、depth gate 和 owner-driven cancel |
 | [`mini_workflow_replay`](./async-demos/src/bin/mini_workflow_replay.rs) | 相同 host call 恢复时会不会再次产生副作用？参数变化和预算超限怎样失败？ | 密集 journal sequence、request hash、divergence 和原子 reservation |
 | [`mini_trace_timeline`](./async-demos/src/bin/mini_trace_timeline.rs) | 裸 `spawn` 会继承 task-local 吗？哪些 ID 能串起 prompt、request 和 tool？ | 显式上下文传播、traceparent、关联键作用域和字符串字段默认拒绝 |
 | [`spawn_local_rc`](./async-demos/src/bin/spawn_local_rc.rs) | `Rc<RefCell<_>>` 为什么不能交给普通 `spawn`，这里却能共享？ | current-thread runtime 仍需 `LocalSet`；不依赖两个 task 的偶然调度顺序 |
@@ -64,7 +74,7 @@ cargo run --locked \
 
 ## 一键校验
 
-下面的命令会运行全部正常 Katas、确认六个反例按预期编译失败，并逐个运行二十个 async demos：
+下面的命令会运行全部正常 Katas、确认六个反例按预期编译失败，并逐个运行三十个 async demos：
 
 ```sh
 docs/rust-essentials/labs/check.sh

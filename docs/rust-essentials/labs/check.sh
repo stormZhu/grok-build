@@ -40,15 +40,25 @@ async_demos=(
     watch_latest
     actor_request_reply
     mini_session_actor
+    mini_turn_end_to_end
     mini_tool_pipeline
+    mini_permission_layers
+    mini_pager_reducer
     mini_replay_order
+    mini_storage_recovery
     mini_cancel_shutdown
     mini_sampler_retry
     mini_context_compaction
     mini_workspace_rewind
     mini_config_resolution
+    mini_prompt_assembly
+    mini_capability_injection
+    mini_extension_lifecycle
+    mini_host_leader_routing
     mini_auth_model_boundary
     mini_mcp_singleflight
+    mini_mcp_dispatch_window
+    mini_subagent_scope
     mini_workflow_replay
     mini_trace_timeline
     spawn_local_rc

@@ -327,6 +327,18 @@ SessionActor 收到 Prompt
 
 注意不是每个 turn 都走所有分支：没有 tool call 就没有 tool hooks；memory 若不启用、不命中或已存在 marker 就不查询；Stop/subagent hooks 只在相应结束分支触发。不要以“一个 hook 没收到事件”推断整个 session loop 没有运行。
 
+## 可运行缩小实验
+
+先运行 [`mini_extension_lifecycle.rs`](../rust-essentials/labs/async-demos/src/bin/mini_extension_lifecycle.rs)，再追真实 hook runner：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_extension_lifecycle
+```
+
+程序固定验证 contributor 按注册顺序 dispatch；explicit hook deny 会阻止 permission/dispatch；hook runner failure 默认 fail-open；hook allow 仍必须经过 permission；成功与工具失败只触发各自互斥的 post event。运行前写出每个场景的事件序列，再把差异映射到 `TurnLifecycleContributor`、`PreToolUse`、permission gate、ToolBridge 和 post hook fire point。
+
 ## 8. 贡献时按问题选择 owner
 
 | 想改变的行为 | 首先读 | 需要同时审查 |

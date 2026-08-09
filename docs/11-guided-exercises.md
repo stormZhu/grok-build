@@ -124,6 +124,11 @@ cargo run --locked \
   --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
   --bin mini_session_actor
 
+# 再把 queue、两次 sampling、tool join 和 completion 边界串成一轮
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_turn_end_to_end
+
 rg -n "tokio::select!|SessionCommand::Prompt|SessionCommand::Cancel|Shutdown|completion_rx" \
   crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs
 cargo test -p xai-grok-shell run_session -- --nocapture
@@ -140,7 +145,7 @@ cargo test -p xai-grok-shell run_session -- --nocapture
 - shutdown 为什么要 flush replay buffer；
 - 哪些分支可以安全地让 `.await` 取消，哪些需要清理 guard。
 
-先把 `mini_session_actor` 中的 `SessionCommand`、`pending_inputs`、`running_task`、`completion_rx`、`maybe_start_running_task` 和 `shutdown:flush` 逐项映射到生产源码；无法映射的 memory、MCP、replay 和 fs watcher 分支，留到第二遍再读。
+先把 `mini_session_actor` 中的 `SessionCommand`、`pending_inputs`、`running_task`、`completion_rx`、`maybe_start_running_task` 和 `shutdown:flush` 逐项映射到生产源码；再用 [`mini_turn_end_to_end`](./rust-essentials/labs/async-demos/src/bin/mini_turn_end_to_end.rs) 检查一次 Turn 内两次 sampling、tool-call 配对和四种确认边界。无法映射的 memory、MCP、replay 和 fs watcher 分支，留到第二遍再读。
 
 ---
 
@@ -170,6 +175,11 @@ cargo test -p xai-grok-shell run_session -- --nocapture
 cargo run --locked \
   --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
   --bin mini_replay_order
+
+# 再验证 durable ack、提交分类、torn tail 和 snapshot replace
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_storage_recovery
 
 rg -n "PersistenceMsg::(Chat|Update|FlushAndAck|ReplaceChatHistory)|AppendUpdateError" \
   crates/codegen/xai-grok-shell/src/session
@@ -212,6 +222,9 @@ rg -n "ReplayBuffer|replay_buffer\.flush|FlushReplay" \
 ### 操作
 
 ```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_prompt_assembly
 cargo test -p xai-grok-agent
 rg -n "PromptMode|PromptAudience|TemplateOverride|AGENTS|skill" \
   crates/codegen/xai-grok-agent/src crates/codegen/xai-grok-agent/templates
@@ -264,6 +277,16 @@ Return findings ordered by severity.
 cargo run --locked \
   --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
   --bin mini_tool_pipeline
+
+# 再观察 toolset 级资源和单次调用能力的边界
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_capability_injection
+
+# 最后分开观察 plan、permission manager 与 OS sandbox
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_permission_layers
 
 cargo test -p xai-tool-runtime
 cargo test -p xai-grok-tools registry
@@ -403,7 +426,13 @@ rg -n "should_prune|soft_trim|hard_clear|context_window|MAX_REQUEST_BYTES" \
 
 ### 操作
 
+先复用实验 2 的 [`mini_turn_end_to_end`](./rust-essentials/labs/async-demos/src/bin/mini_turn_end_to_end.rs)，把 fake host 中的 prompt、两次 sampling、tool call/result 和 completion 逐段映射到同一条时间线；这里不重复运行命令。然后分别观察 Pager reducer 与 Workflow journal：
+
 ```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_pager_reducer
+
 cargo run --locked \
   --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
   --bin mini_workflow_replay
@@ -509,21 +538,23 @@ Pager queue -> ACP Prompt -> SessionActor admission
 
 ## 11. 继续深入的分流
 
-完成实验 0–10 后按兴趣选择：
+完成实验 0–10 后按兴趣选择。进入 Prompt、工具资源/权限、扩展、Pager 或 Host/Leader 源码前，分别运行 `mini_prompt_assembly`、`mini_capability_injection` / `mini_permission_layers`、`mini_extension_lifecycle`、`mini_pager_reducer` 和 `mini_host_leader_routing`；它们把容易混淆的生命周期与路由边界压缩成可直接断言的结果。
 
-进入 Workspace、配置/认证、MCP 或 Workflow 源码前，分别运行 [`mini_workspace_rewind`](./rust-essentials/labs/async-demos/src/bin/mini_workspace_rewind.rs)、[`mini_config_resolution`](./rust-essentials/labs/async-demos/src/bin/mini_config_resolution.rs)、[`mini_auth_model_boundary`](./rust-essentials/labs/async-demos/src/bin/mini_auth_model_boundary.rs)、[`mini_mcp_singleflight`](./rust-essentials/labs/async-demos/src/bin/mini_mcp_singleflight.rs) 和 [`mini_workflow_replay`](./rust-essentials/labs/async-demos/src/bin/mini_workflow_replay.rs)。先写下状态/优先级/并发结果的预测，再用下面的专题解释生产实现多出的路径、策略和持久化边界。
+进入 Workspace、配置/认证或 MCP 源码前，分别运行 [`mini_workspace_rewind`](./rust-essentials/labs/async-demos/src/bin/mini_workspace_rewind.rs)、[`mini_config_resolution`](./rust-essentials/labs/async-demos/src/bin/mini_config_resolution.rs)、[`mini_auth_model_boundary`](./rust-essentials/labs/async-demos/src/bin/mini_auth_model_boundary.rs) 和 [`mini_mcp_singleflight`](./rust-essentials/labs/async-demos/src/bin/mini_mcp_singleflight.rs)。进入子代理或 Workflow 前，先后运行 [`mini_subagent_scope`](./rust-essentials/labs/async-demos/src/bin/mini_subagent_scope.rs) 与 [`mini_workflow_replay`](./rust-essentials/labs/async-demos/src/bin/mini_workflow_replay.rs)，分别观察 child session scope 和 journal replay。先写下状态/优先级/并发结果的预测，再用下面的专题解释生产实现多出的路径、策略和持久化边界。
 
 | 方向 | 下一篇/下一组源码 |
 |---|---|
 | Rust async/actor | `rust-essentials/08`–`17`、shell `run_loop.rs`、[`sampling-lifecycle.md`](./deep-dives/sampling-lifecycle.md) |
-| Agent 行为和 prompt | `05-prompt-engineering.md`、[`prompt-assembly.md`](./deep-dives/prompt-assembly.md)、`xai-grok-agent/src/prompt/` |
-| 工具和安全 | `deep-dives/tool-call-pipeline.md`、workspace permission、sandbox |
+| Agent 行为和 prompt | [`mini_prompt_assembly`](./rust-essentials/labs/async-demos/src/bin/mini_prompt_assembly.rs)、`05-prompt-engineering.md`、[`prompt-assembly.md`](./deep-dives/prompt-assembly.md)、`xai-grok-agent/src/prompt/` |
+| 工具和安全 | [`mini_capability_injection`](./rust-essentials/labs/async-demos/src/bin/mini_capability_injection.rs)、[`mini_permission_layers`](./rust-essentials/labs/async-demos/src/bin/mini_permission_layers.rs)、`deep-dives/tool-call-pipeline.md`、workspace permission、sandbox |
+| Extensions / hooks | [`mini_extension_lifecycle`](./rust-essentials/labs/async-demos/src/bin/mini_extension_lifecycle.rs)、[`extensions-and-lifecycle.md`](./deep-dives/extensions-and-lifecycle.md)、hook runner fixture |
 | Workspace 状态和隔离 | [`workspace-state-and-worktree-lifecycle.md`](./deep-dives/workspace-state-and-worktree-lifecycle.md)、`xai-grok-workspace/src/session/`、`src/worktree/`、`xai-hunk-tracker` |
-| 子代理和 Workflow | [`subagents-and-workflows.md`](./deep-dives/subagents-and-workflows.md)、`xai-grok-subagent-resolution`、`xai-workflow`、shell `agent/subagent/` 与 `session/workflow/` |
+| 子代理和 Workflow | [`mini_subagent_scope`](./rust-essentials/labs/async-demos/src/bin/mini_subagent_scope.rs)、[`mini_workflow_replay`](./rust-essentials/labs/async-demos/src/bin/mini_workflow_replay.rs)、[`subagents-and-workflows.md`](./deep-dives/subagents-and-workflows.md)、`xai-grok-subagent-resolution`、`xai-workflow`、shell `agent/subagent/` 与 `session/workflow/` |
 | 配置和策略 | [`configuration-and-runtime-resolution.md`](./deep-dives/configuration-and-runtime-resolution.md)、`xai-grok-config/src/loader.rs`、`validation.rs`、shell `agent/config.rs` |
-| 长会话和 memory | `04-context-management.md`、compaction、memory crate |
-| ACP/MCP 集成 | `06-interfaces.md`、`xai-acp-lib`、`xai-grok-mcp`、[`mcp-lifecycle.md`](./deep-dives/mcp-lifecycle.md)、[`mcp-dispatcher.md`](./deep-dives/mcp-dispatcher.md) |
-| TUI/终端 | `xai-grok-pager`、markdown、PTY harness、ratatui crates |
+| 长会话、持久化和 memory | [`mini_storage_recovery`](./rust-essentials/labs/async-demos/src/bin/mini_storage_recovery.rs)、`04-context-management.md`、[`persistence-and-replay.md`](./deep-dives/persistence-and-replay.md)、compaction、memory crate |
+| ACP/MCP 集成 | [`mini_mcp_singleflight`](./rust-essentials/labs/async-demos/src/bin/mini_mcp_singleflight.rs)、[`mini_mcp_dispatch_window`](./rust-essentials/labs/async-demos/src/bin/mini_mcp_dispatch_window.rs)、`06-interfaces.md`、`xai-acp-lib`、[`mcp-lifecycle.md`](./deep-dives/mcp-lifecycle.md)、[`mcp-dispatcher.md`](./deep-dives/mcp-dispatcher.md) |
+| Host / Leader 路由 | [`mini_host_leader_routing`](./rust-essentials/labs/async-demos/src/bin/mini_host_leader_routing.rs)、[`host-modes-and-entrypoints.md`](./deep-dives/host-modes-and-entrypoints.md)、[`leader-control-plane.md`](./deep-dives/leader-control-plane.md) |
+| TUI/终端 | [`mini_pager_reducer`](./rust-essentials/labs/async-demos/src/bin/mini_pager_reducer.rs)、[`pager-rendering.md`](./deep-dives/pager-rendering.md)、`xai-grok-pager`、PTY harness、ratatui crates |
 | 代码索引和 workspace | `xai-codebase-graph`、fsnotify、fast-worktree、hunk tracker |
 | 开发与贡献实践 | [`contributor-workflow.md`](./deep-dives/contributor-workflow.md)、`xai-grok-test-support`、`xai-grok-shell/tests/` |
 

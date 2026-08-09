@@ -405,6 +405,16 @@ cargo run --locked \
 
 [`mini_replay_order.rs`](../rust-essentials/labs/async-demos/src/bin/mini_replay_order.rs) 通过 oneshot processed ack 建立确定顺序，并断言客户端只能依次看到：合并后的 `Hello`、非流式 tool event、completion 分支 flush 的尾部文本、`TurnCompleted`。它只模拟内存 ReplayBuffer，不写 `updates.jsonl`，因此不能证明 crash recovery 或 durability。
 
+再运行存储提交与恢复模型：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_storage_recovery
+```
+
+[`mini_storage_recovery.rs`](../rust-essentials/labs/async-demos/src/bin/mini_storage_recovery.rs) 区分 channel enqueue 与 `FlushAndAck` durable barrier，断言 `NotCommitted` 可以安全重试、`Committed` 不可盲目重试，并覆盖 torn JSONL tail 隔离、chat snapshot 原子替换和 updates 审计流保留。前一个 demo 聚焦内存 replay 顺序；这个 demo 聚焦 durability/crash boundary，两者不能互相替代。
+
 不接真实模型也可以验证自己的理解：
 
 1. 找一个测试用的临时 session 目录，写入两轮 ACP `user_message_chunk` 和一条 `RewindMarker(target_prompt_index = 1)`；

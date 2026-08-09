@@ -397,7 +397,17 @@ definition / override pure test
 
 ## 8. 源码实验：不接真实模型也能完成
 
-先运行 [`mini_workflow_replay.rs`](../rust-essentials/labs/async-demos/src/bin/mini_workflow_replay.rs)：
+先运行 child session 所有权模型：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_subagent_scope
+```
+
+[`mini_subagent_scope.rs`](../rust-essentials/labs/async-demos/src/bin/mini_subagent_scope.rs) 区分 fresh、fork、resume 的上下文语义，断言父子 history 独立、resume 固定 identity/source model、worktree 隔离以实际创建结果为准，并演示 parent 通过 coordinator 请求取消、由 child drain 后报告终态。它覆盖的是单个 child session 的 scope 和 owner 边界。
+
+再运行 Workflow journal 模型：
 
 ```sh
 cargo run --locked \
@@ -405,7 +415,7 @@ cargo run --locked \
   --bin mini_workflow_replay
 ```
 
-程序断言首次 host call 执行并记录、相同 sequence/kind/hash 直接 replay 且不重复副作用、参数漂移产生 divergence、非密集 sequence 被拒绝，以及失败 reservation 不改变预算。缩小版用 FNV-1a 内存哈希；生产 journal 使用 SHA-256、JSONL 上限/安全加载、torn-tail 恢复和 tracker reconcile。
+[`mini_workflow_replay.rs`](../rust-essentials/labs/async-demos/src/bin/mini_workflow_replay.rs) 断言首次 host call 执行并记录、相同 sequence/kind/hash 直接 replay 且不重复副作用、参数漂移产生 divergence、非密集 sequence 被拒绝，以及失败 reservation 不改变预算。它覆盖 Workflow journal，而不是 child conversation。缩小版用 FNV-1a 内存哈希；生产 journal 使用 SHA-256、JSONL 上限/安全加载、torn-tail 恢复和 tracker reconcile。
 
 1. 选 `explore` definition，调用 `resolve_agent_definition`，验证 read/search 工具存在而 execute/task 被 capability/depth policy 移除。
 2. 构造含 `System → User → Reasoning → Assistant → ToolResult` 的 conversation，调用 `normalize_forked_context`，观察最近三轮 verbatim、早期摘要和被删除的 `<git_status>`。

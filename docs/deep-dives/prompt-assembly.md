@@ -276,6 +276,18 @@ flowchart LR
 - 应按 turn 变化：runtime reminder；
 - 不应出现在模型上下文：仅 UI 文字、日志、内部配置 secret。
 
+## 可运行缩小实验
+
+先不接真实模型，运行 [`mini_prompt_assembly.rs`](../rust-essentials/labs/async-demos/src/bin/mini_prompt_assembly.rs)：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_prompt_assembly
+```
+
+运行前先预测 extend/full、primary/subagent 和工具名 override 各会改变什么。程序会断言四个核心契约：registry 同时驱动 prompt 名称与 tool definitions；首轮 preamble 携带 workspace/rules/skills/MCP；`ProjectInstructions` 恢复注入幂等；runtime reminder 只改变 conversation，不改 stable system。随后把缩小模型中的四层逐项映射回 `PromptContext`、`UserMessageContext`、`ChatState` 和 request build，记录生产代码多出的持久化与错误边界。
+
 ## 9. 自定义 Agent 的安全改法
 
 下面例子保留 base prompt，只追加一个审查角色，适合作为起点：

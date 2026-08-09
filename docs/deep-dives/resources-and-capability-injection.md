@@ -269,6 +269,20 @@ flowchart TD
 
 ---
 
+## 可运行缩小实验
+
+[`mini_capability_injection.rs`](../rust-essentials/labs/async-demos/src/bin/mini_capability_injection.rs) 用 `TypeId + Arc<dyn Any + Send + Sync>` 保留生产 `Resources` 的关键类型边界：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_capability_injection
+```
+
+程序断言 rebuild 会重新注入 Workspace/Web client、persistent counter 跨 rebuild 保留、credential 和 cancellation 只属于单次 call，以及缺少必需 Web client 时显式返回 `missing resource`。运行后分别为生产中的一个 `Params<T>`、`State<T>`、ephemeral resource 和 `ToolCallContext` extension 找到插入点与消费点；如果找不到 rebuild 路径，就还不能证明该能力生命周期完整。
+
+---
+
 ## 7. 测试和调试路线
 
 | 症状 | 优先检查 | 最小测试证据 |

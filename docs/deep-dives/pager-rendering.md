@@ -105,6 +105,18 @@ resize 后内容跳动                      -> layout cache 失效或 selection 
 
 先查 `acp/tracker.rs` 的 `process_update` 和 `update_summary`，再查 `scrollback/state/{mod.rs,nav.rs,selection.rs}` 的 follow/selection mutation，最后才看 `pager-render` 的主题和 terminal adapter。颜色或主题通常不是数据丢失的根因。
 
+## 可运行缩小实验
+
+[`mini_pager_reducer.rs`](../rust-essentials/labs/async-demos/src/bin/mini_pager_reducer.rs) 把 ACP tracker 缩成一个可观察 reducer：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_pager_reducer
+```
+
+运行前预测 entry 数量和每个稳定 EntryId。程序验证同 stream 文本追加到一个 block、工具开始切断当前 agent block、交错 update 必须按 tool-call ID 路由、completion 先于 start 时暂存 orphan update、本地 prompt echo 只跳过一次，以及手动上滚后新内容不会强制恢复 follow。它不模拟 markdown layout、Unicode 宽度或 terminal draw，这些仍需 tracker fixture、scrollback 单测和 PTY snapshot。
+
 ## 8. 测试和可视化验证
 
 - tracker 单测：构造 `AgentMessageChunk`、thought、tool call/update，断言 entry 数量、文本合并和终态；

@@ -246,6 +246,18 @@ HandshakeFailed(auth rejection)
 
 restart task 通过 `RestartInFlightGuard` 的 `Drop` 释放 claim，覆盖成功、失败、取消和 panic 路径。没有 RAII 的话，一个失败 task 留下的名字会永久阻止未来恢复。
 
+## 可运行缩小实验
+
+先运行 [`mini_mcp_dispatch_window.rs`](../rust-essentials/labs/async-demos/src/bin/mini_mcp_dispatch_window.rs)：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_mcp_dispatch_window
+```
+
+程序锁定 50ms tumbling window、同 key last-write-wins、ConfigDiff per-server fan-out，以及 wire buffer 与全量 close identities 两个视图。它还验证当前 stdio client 的任一 close ID 会触发 eviction，纯 stale close 会从 status/restart 路径完全移除，HTTP 走原地 reset，managed auth rejection 才映射 NeedsAuth，并且只有 ConfigRemoved 而非 TransportClosed 标记 intentional shutdown。真实异步 deadline、backoff、LocalSet 和 ACP push 仍应由 paused-clock 与 dispatcher e2e fixture 证明。
+
 ## 9. 测试如何对应不变量
 
 先按纯函数/事件层阅读测试，再看真实 session wiring：

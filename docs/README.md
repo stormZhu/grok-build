@@ -19,6 +19,7 @@
 | 文档 | 内容 |
 |------|------|
 | [参考资料.md](./参考资料.md) | 外部学习资料与仓库内部阅读入口 |
+| [项目英语学习](./english-learning/README.md) | 绑定本仓库 README、源码注释和 Agent/Rust 语义的技术英语路线、词组、分级练习与输出模板 |
 | [Rust 必备知识](./rust-essentials/README.md) | 面向本仓库的 Rust 课程：能力自测、语言专题、异步并发、语法解码、API 导航与 8 关源码实验 |
 | [01-learning-guide.md](./01-learning-guide.md) | 学习路径：编译、语言栈、核心概念、推荐阅读顺序 |
 | [02-architecture.md](./02-architecture.md) | 整体架构、分层、crate 地图、进程/入口模型 |

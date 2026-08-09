@@ -61,13 +61,13 @@ let another_handle = session_handle.clone();
 
 在这个项目中，各概念可以对应为：
 
-| 概念 | 作用 | 类比 |
-|---|---|---|
-| `SessionActor` | 真正保存并管理会话状态的执行实体 | 厨房里的厨师 |
-| `SessionHandle` | 外部操作会话的代理或遥控器 | 前台点餐器 |
-| `SessionCommand` | Handle 发给 Actor 的操作指令 | 订单 |
-| MPSC channel | 命令从 Handle 到 Actor 的传输通道 | 订单传送带 |
-| oneshot channel | Actor 向某次调用返回一个结果 | 一次性取餐窗口 |
+| 概念               | 作用                       | 类比      |
+| ---------------- | ------------------------ | ------- |
+| `SessionActor`   | 真正保存并管理会话状态的执行实体         | 厨房里的厨师  |
+| `SessionHandle`  | 外部操作会话的代理或遥控器            | 前台点餐器   |
+| `SessionCommand` | Handle 发给 Actor 的操作指令    | 订单      |
+| MPSC channel     | 命令从 Handle 到 Actor 的传输通道 | 订单传送带   |
+| oneshot channel  | Actor 向某次调用返回一个结果        | 一次性取餐窗口 |
 
 项目中的 `SessionActor` 定义在：
 
@@ -597,3 +597,4 @@ MvpAgent / 外部模块
 - 模型 Turn 被拆成独立的本地异步任务，不会持续占住命令循环；
 - `IsBusy` 通过消息查询权威状态，可能短暂排队，但模型生成期间通常仍能得到响应；
 - 整体是单线程上的协作式并发，不是多线程并行。
+

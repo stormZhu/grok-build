@@ -600,6 +600,18 @@ Pager
 
 写新 feature 时，用这张表决定测试断言的层级。比如修改 scrollback 只需测第一条；改 tool protocol 必须测第二条；改 persistence 或 cancellation，则第三条必须有回归测试。不要为了验证任何一条而把所有层都启动起来，测试专题中的 `MockInferenceServer`、typed ACP client 和 JSONL fixture 就是为了让这些边界能独立观察。
 
+### 9.3 可运行实验：把整轮边界放在一条时间线上
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_turn_end_to_end
+```
+
+[`mini_turn_end_to_end.rs`](../rust-essentials/labs/async-demos/src/bin/mini_turn_end_to_end.rs) 用一次带工具调用的 Turn 断言两次 sampling、assistant call/result 的 `tool_call_id` 配对，以及 `replay flush < PromptResponse < durable TurnCompleted < next queued prompt`。它还区分用户持久化 ack、Sampler 输出、RPC 完成和 durable terminal 四种“已完成”，并确认 Pager 的乐观回显不会被服务端 echo 重复插入。
+
+这个缩小模型不启动 ACP 网络、真实 sampler 或磁盘，因此它验证的是跨 owner 的顺序契约，不是 transport、模型后端或文件系统实现。需要验证单个组件时，仍应使用 typed ACP client、sampler fixture 和 JSONL 恢复测试。
+
 ---
 
 ## 10. 一条消息的“数据面”和“控制面”

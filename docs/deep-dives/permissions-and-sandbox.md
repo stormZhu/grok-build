@@ -167,6 +167,18 @@ ToolInput::Bash(command)
 
 建议按 `tool_call_id` 搜索 `permission_requested`、`tool.decision`、`sandbox.profile_applied` 和 `sandbox.*_violation`。若有 `Allow` 却没有进程，查 preflight/dispatch；若没有 `Allow` 但进程确实启动，查是否绕过了 manager；若进程启动后得到 `EACCES` 或网络失败，查 profile，而不是重复点权限。
 
+## 可运行缩小实验
+
+先运行 [`mini_permission_layers.rs`](../rust-essentials/labs/async-demos/src/bin/mini_permission_layers.rs)，再追 manager 和 sandbox：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_permission_layers
+```
+
+程序断言 ToolInput 先归一为语义 AccessKind；未知 Bash 形状 fail-closed 为 Ask；YOLO/auto 互斥且 managed pin/deny 不可绕过；plan gate 先于 manager；PolicyDeny 允许模型继续调整，而 Reject、Cancelled、Followup 各有不同 turn 终态；即使获得 Allow，网络仍可能被 OS sandbox 拒绝。缩小模型没有实现真实脚本解析、权限 UI 和平台 syscall，应继续用 policy、shell fixture 与 sandbox profile 测试覆盖。
+
 ## 9. 测试阅读路线
 
 - `workspace/src/permission/manager/mod.rs`：YOLO/auto 互斥、managed pin、persisted grant 和并发请求测试；
@@ -175,4 +187,3 @@ ToolInput::Bash(command)
 - `xai-grok-sandbox`：profile 解析、deny 优先级、hook identity 和网络 violation 测试。
 
 一个好的回归测试至少覆盖三种时机：权限请求前取消、用户弹窗中取消、工具已启动后的取消；它们应分别验证 request 不执行、decision 为 `Cancelled`、以及子进程收到 cancellation。
-
