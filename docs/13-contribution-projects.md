@@ -10,6 +10,7 @@
 - [deep-dives/contributor-workflow.md](./deep-dives/contributor-workflow.md)：fixture、异步取消和协议证据。
 - [deep-dives/subagents-and-workflows.md](./deep-dives/subagents-and-workflows.md)：definition、fork/resume、隔离 worktree、Rhai journal 和 Workflow 状态机。
 - [deep-dives/resources-and-capability-injection.md](./deep-dives/resources-and-capability-injection.md)：工具依赖、取消、session 能力和 rebuild 注入边界。
+- [deep-dives/cancellation-and-shutdown.md](./deep-dives/cancellation-and-shutdown.md)：取消、超时、replay flush、工具进程和子代理关闭的跨层证据。
 - [deep-dives/configuration-and-runtime-resolution.md](./deep-dives/configuration-and-runtime-resolution.md)：配置层级、requirements/MDM、campaign、来源优先级和 settings refresh。
 - [deep-dives/workspace-state-and-worktree-lifecycle.md](./deep-dives/workspace-state-and-worktree-lifecycle.md)：WorkspaceSession、rewind checkpoint、hunk/git 恢复和 worktree 隔离。
 

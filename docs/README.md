@@ -10,6 +10,8 @@
 > 官方产品文档见 [docs.x.ai/build](https://docs.x.ai/build/overview)；用户手册在
 > `crates/codegen/xai-grok-pager/docs/user-guide/`。
 
+验证原则：只修改 `docs/` 下的 Markdown 时，不需要运行 Cargo 构建或测试；做链接、围栏、空白和人工内容审查即可。只有 Rust、Cargo manifest、生成输入或运行时资源发生变化时，才按 [09-contributor-playbook.md](./09-contributor-playbook.md) 选择最小的代码验证范围。
+
 ---
 
 ## 文档索引
@@ -68,6 +70,8 @@
 24. **源码精读 / observability-and-trace-timeline** — 学会用关联 ID、span、unified log、firehose 和 OTLP 还原一次消息
 25. **源码精读 / contributor-workflow** — 学会按 owner 选测试、收集异步/协议证据并写出可审查改动
 26. **源码精读 / resources-and-capability-injection** — 理解工具依赖、session 能力、取消和持久化资源如何注入与重建
+27. **源码精读 / host-modes-and-entrypoints** — 区分 `grok -p`、relay headless、stdio 与 Leader 的真实入口和生命周期
+28. **源码精读 / cancellation-and-shutdown** — 理解取消、超时、replay flush、工具进程和子代理关闭的跨层不变量
 
 ---
 

@@ -79,13 +79,16 @@ flowchart TB
 
 ## 2. 进程与入口模型
 
-### 2.1 三种运行形态
+### 2.1 运行形态与真实入口
 
 | 形态 | 入口 | 说明 | 代码入口 |
 |------|------|------|---|
 | **交互 TUI** | `xai-grok-pager-bin` → pager app | UI 进程；可通过 **Leader** 或直连驱动 agent | [`pager-bin/src/main.rs`](../crates/codegen/xai-grok-pager-bin/src/main.rs)、[`pager/src/lib.rs`](../crates/codegen/xai-grok-pager/src/lib.rs) |
-| **Headless** | `run_headless` | 单次/脚本式 prompt，无 TUI | [`shell/src/agent/app.rs`](../crates/codegen/xai-grok-shell/src/agent/app.rs) |
+| **单轮 headless** | `grok -p` → `run_single_turn` | Pager 进程内创建 shell，通过 ACP 驱动一次 prompt；stdout 是 plain/JSON 结果 | [`pager/src/headless.rs`](../crates/codegen/xai-grok-pager/src/headless.rs)、[`pager-bin/src/main.rs`](../crates/codegen/xai-grok-pager-bin/src/main.rs) |
+| **Relay headless** | `grok agent headless` → `run_headless` | 长期运行的非 TUI Agent，通过 Grok WebSocket relay 工作；要求 grok.com session | [`shell/src/agent/app.rs`](../crates/codegen/xai-grok-shell/src/agent/app.rs)、[`shell/src/agent/relay.rs`](../crates/codegen/xai-grok-shell/src/agent/relay.rs) |
 | **stdio Agent** | `run_stdio_agent` | 标准输入输出上的 ACP，供 IDE 嵌入 | [`shell/src/agent/app.rs`](../crates/codegen/xai-grok-shell/src/agent/app.rs)、[`shell/src/agent/relay.rs`](../crates/codegen/xai-grok-shell/src/agent/relay.rs) |
+
+不要把两个 headless 入口合并理解：顶层 `main` 在普通 `Command::Agent` 分流之前检查 `HeadlessPrompt::from_args`，所以 `grok -p` 不会调用 shell 的 `run_headless`，也不会自动接入 Leader。`grok agent` 没有子命令时，才会在 `run_agent_command` 的 `None` 分支调用 `run_headless`。完整的进程所有权、stdout 契约与重连语义见[宿主模式与运行入口精读](./deep-dives/host-modes-and-entrypoints.md)。
 
 Leader（`xai-grok-shell::leader`）负责：
 

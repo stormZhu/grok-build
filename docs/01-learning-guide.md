@@ -6,7 +6,7 @@
 2. 能从用户输入一路追到模型调用和工具执行；
 3. 能为一个小改动找到合适的 crate，并用最小范围的命令验证它。
 
-深入的架构、Agent Loop、上下文与协议内容分别见 [02-architecture.md](./02-architecture.md)、[03-agent-loop.md](./03-agent-loop.md)、[04-context-management.md](./04-context-management.md) 与 [06-interfaces.md](./06-interfaces.md)。想专门理解用户消息如何穿过 TUI、ACP、SessionActor 和 ChatState，可读 [源码精读/message-flow.md](./deep-dives/message-flow.md)；想按 workspace package 反查代码，读 [10-crate-catalog.md](./10-crate-catalog.md)；想动手练习，读 [11-guided-exercises.md](./11-guided-exercises.md)。外部资料和进一步阅读入口见 [参考资料.md](./参考资料.md)。
+深入的架构、Agent Loop、上下文与协议内容分别见 [02-architecture.md](./02-architecture.md)、[03-agent-loop.md](./03-agent-loop.md)、[04-context-management.md](./04-context-management.md) 与 [06-interfaces.md](./06-interfaces.md)。想专门理解用户消息如何穿过 TUI、ACP、SessionActor 和 ChatState，可读 [源码精读/message-flow.md](./deep-dives/message-flow.md)；想理解 `grok -p`、relay headless、stdio 和 Leader 的真实生命周期，可读[宿主模式与运行入口](./deep-dives/host-modes-and-entrypoints.md)；想理解取消、超时、工具进程和子代理如何收尾，可读[取消、超时与关闭](./deep-dives/cancellation-and-shutdown.md)；想按 workspace package 反查代码，读 [10-crate-catalog.md](./10-crate-catalog.md)；想动手练习，读 [11-guided-exercises.md](./11-guided-exercises.md)。外部资料和进一步阅读入口见 [参考资料.md](./参考资料.md)。
 
 ---
 
@@ -21,8 +21,10 @@
 | 使用方式 | 典型命令或入口 | 适用场景 |
 |---|---|---|
 | 交互 TUI | `grok` | 在终端中聊天、查看工具进度、批准操作 |
-| 无头模式 | `grok -p "..."` | 脚本、CI、单次任务 |
-| 编辑器 Agent | `grok agent stdio` | 通过 ACP 嵌入 IDE |
+| 单轮结果 | `grok -p "..."` | 脚本、CI、一次 prompt；输出 plain/JSON/流式 JSON |
+| Relay Agent | `grok agent headless` | 长期在线的 Grok.com relay Agent；需要 session |
+| 编辑器 Agent | `grok agent stdio` | 通过 ACP 嵌入 IDE；stdout 只能是协议 |
+| 共享宿主 | `grok agent leader` | 多客户端共享 Agent/Session/Workspace；本机 Unix socket |
 
 它不是“调用一次模型 API 的脚本”。一次用户请求可以反复执行以下循环：模型回复 → 请求工具 → 本地执行工具 → 把结果回传模型，直至模型不再请求工具、用户取消或达到限制。
 
@@ -92,9 +94,25 @@
 
 ---
 
-## 3. 第一次构建：先建立可靠反馈
+## 3. 先建立与改动匹配的反馈
 
-### 3.1 环境要求
+### 3.1 只改文档时不要构建
+
+`.md`、`docs/` 索引、源码阅读笔记和链接修正不会改变 Rust 编译输入。此类改动的反馈应是：
+
+```text
+编辑 Markdown
+  -> git diff --check
+  -> 相对链接存在性检查
+  -> fenced code block / 表格格式检查
+  -> 人工通读引用的源码路径
+```
+
+不要因为文档中出现 Rust 代码片段就运行 `cargo build`；代码围栏是解释材料，不会被 Cargo 编译。只有当本次改动涉及 `.rs`、`Cargo.toml`、`Cargo.lock`、build script、生成输入或会改变运行时行为的资源时，才选择对应的 `cargo check`、focused test 或 build。构建产物、网络下载和测试临时目录也会增加无关噪声，不能代替 Markdown 静态校验。
+
+### 3.2 代码改动时再准备第一次构建
+
+### 3.3 环境要求
 
 仓库的 [rust-toolchain.toml](../rust-toolchain.toml) 固定 Rust 版本；当前为 `1.94.0`。建议用 `rustup` 管理，而不是手动安装一个不受管理的 `rustc`。
 
@@ -115,7 +133,7 @@ dotslash --help
 
 构建时出现 `dotslash` 或 `protoc` 缺失错误，可直接按 [08-build-troubleshooting.md](./08-build-troubleshooting.md) 的实际案例修复。
 
-### 3.2 推荐的第一组命令
+### 3.4 推荐的第一组命令
 
 在仓库根目录运行。先用 `cargo check`，它会做类型检查但不链接最终可执行文件，反馈通常比 `build` 更快。
 
@@ -132,7 +150,7 @@ cargo build -p xai-grok-pager-bin --release
 
 认证、模型可用性或网络问题不妨碍你阅读和编译大多数本地代码；如果目的只是学习源码，先以 `cargo check` 和局部测试为主。
 
-### 3.3 常用开发命令
+### 3.5 常用开发命令
 
 把 `<crate>` 替换成正在修改或阅读的 crate 名，例如 `xai-grok-agent`。
 
@@ -153,7 +171,7 @@ cargo fmt --all
 cargo metadata --no-deps --format-version 1
 ```
 
-### 3.4 常见的第一次失败
+### 3.6 常见的第一次失败
 
 | 现象 | 先检查什么 |
 |---|---|
@@ -238,10 +256,11 @@ run_leader
 
 ```text
 xai-grok-pager-bin/src/main.rs
-  ├─ TUI 交互    -> xai-grok-pager
-  ├─ Headless    -> xai-grok-shell::agent::app::run_headless
-  ├─ stdio ACP   -> xai-grok-shell::agent::app::run_stdio_agent
-  └─ Leader      -> xai-grok-shell::agent::app::run_leader
+  ├─ TUI 交互       -> xai-grok-pager
+  ├─ grok -p        -> xai-grok-pager::headless::run_single_turn
+  ├─ agent headless -> xai-grok-shell::agent::app::run_headless
+  ├─ agent stdio    -> xai-grok-shell::agent::app::run_stdio_agent
+  └─ agent leader   -> xai-grok-shell::agent::app::run_leader
 ```
 
 **检查点**：能解释为什么 `pager-bin` 是 composition root：它把各库拼成产品，不应承载大部分业务逻辑。

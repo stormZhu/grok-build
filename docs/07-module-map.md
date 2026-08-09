@@ -20,7 +20,9 @@
 | 路径 | 说明 |
 |------|------|
 | `crates/codegen/xai-grok-shell/src/lib.rs` | shell 模块树 |
-| `.../agent/app.rs` | `run_headless` / `run_leader` / `run_stdio_agent` |
+| `.../agent/app.rs` | `run_headless` / `run_leader` / `run_stdio_agent`；长期宿主与 relay/IPC bridge |
+| `crates/codegen/xai-grok-pager/src/headless.rs` | `grok -p` 的单轮 ACP 驱动器与输出 reducer |
+| `crates/codegen/xai-grok-shell/src/agent/relay.rs` | headless/Leader 的 WebSocket relay、重连与鉴权恢复 |
 | `.../agent/mvp_agent/` | ACP agent、session lifecycle、subagent coordinator |
 | `.../session/acp_session.rs` | SessionActor 根与 path 子模块挂载 |
 | `.../session/acp_session_impl/run_loop.rs` | **外层** `run_session` |
@@ -237,3 +239,5 @@
 - [源码精读：可观测性与 Trace Timeline](./deep-dives/observability-and-trace-timeline.md)
 - [源码精读：贡献者工作流](./deep-dives/contributor-workflow.md)
 - [源码精读：资源注入与能力边界](./deep-dives/resources-and-capability-injection.md)
+- [源码精读：宿主模式与运行入口](./deep-dives/host-modes-and-entrypoints.md)
+- [源码精读：取消、超时与关闭](./deep-dives/cancellation-and-shutdown.md)

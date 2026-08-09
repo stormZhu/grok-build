@@ -18,6 +18,8 @@
 - [prompt-assembly.md](./prompt-assembly.md)：从 Agent Definition、ToolBridge 和 `PromptContext` 追到 system prompt、首轮 preamble、AGENTS/rules、skills 与动态 reminder。
 - [extensions-and-lifecycle.md](./extensions-and-lifecycle.md)：生命周期 contributor、hooks、plugins、skills 与 memory 如何在明确 owner 边界接入 turn，并保持权限、持久化和 loop 控制权不漂移。
 - [leader-control-plane.md](./leader-control-plane.md)：从 lock/socket 竞争、registration 和 ID namespace，追到多 client session route、版本偏斜、断线重连与进程清理。
+- [host-modes-and-entrypoints.md](./host-modes-and-entrypoints.md)：区分 `grok -p` 单轮 ACP 驱动器、`grok agent headless` relay 宿主、stdio 子进程和 Leader host/client 的所有权、协议与退出条件。
+- [cancellation-and-shutdown.md](./cancellation-and-shutdown.md)：从 Session cancel、replay flush、Sampler request-id、工具进程、子代理到 compaction/workflow/MCP，建立取消、超时和关闭的不变量与测试证据。
 - [authentication-and-model-resolution.md](./authentication-and-model-resolution.md)：从配置和模型目录合并追到 `SamplerConfig`、BYOK/session token 隔离、OIDC/external refresh 与 turn 级 401 恢复。
 - [configuration-and-runtime-resolution.md](./configuration-and-runtime-resolution.md)：从 `ConfigLayers`、TOML 深度合并和 requirements/MDM，追到 `new_from_toml_cfg`、runtime resolver、远端 settings refresh 与 session snapshot。
 - [subagents-and-workflows.md](./subagents-and-workflows.md)：从 `task` 请求追到 child `SessionActor`、definition/role/persona、fork/resume、worktree 和 cancellation，再追到 Rhai Workflow 的 host service、journal、预算与恢复状态机。

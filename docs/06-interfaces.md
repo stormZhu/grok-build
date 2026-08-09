@@ -369,7 +369,11 @@ grok -p "Explain this codebase"
 # 支持输出格式、max-turns、模型等 CLI 标志（见 pager/shell 参数）
 ```
 
-Headless 走同一 SessionActor 路径，无 TUI notification 渲染；适合 CI。
+`grok -p` 走同一 SessionActor 路径，但它是 pager 内的单轮 ACP 驱动器：`spawn_grok_shell`、initialize、authenticate、session/new 或 session/load、prompt，然后由 `HeadlessEmitter` 将更新折叠为 plain/JSON/流式 JSON。它不会进入 shell 的 `run_headless`，也不会因为 Leader 配置而改变入口。
+
+`grok agent headless` 是另一种宿主：它在 `xai-grok-shell::agent::run_headless` 中长期运行，通过 Grok WebSocket relay 接收和发送 ACP 行，要求 grok.com session；WebSocket 断开时 Agent 仍可继续运行，持久化/replay 负责恢复。`grok agent stdio` 则是 IDE/SDK 的 ACP 子进程，stdout 必须保持协议纯净，并绑定 stdin EOF/父进程死亡的清理语义。
+
+如果启用 Leader，`main.rs` 会把 stdio/headless 包装成 `LeaderClient`，分别注册为 `ClientMode::Stdio` 或 `ClientMode::Headless`；`grok -p` 仍然是进程内单轮路径。模式、认证和退出条件的逐行分析见[宿主模式与运行入口精读](./deep-dives/host-modes-and-entrypoints.md)。
 
 Introspection：`grok inspect`（`shell/inspect`）导出内部状态便于调试。
 
@@ -380,7 +384,9 @@ Introspection：`grok inspect`（`shell/inspect`）导出内部状态便于调�
 | 目标 | 推荐接口 |
 |------|----------|
 | 嵌入 IDE | ACP stdio |
-| 脚本/CI | Headless CLI 或 ACP |
+| 脚本/CI，读取一次结果 | `grok -p` + `--output-format json` |
+| 脚本/CI，需要长期 ACP 会话 | `grok agent stdio` |
+| 远端 Grok.com Agent 在线 | `grok agent headless` |
 | 自定义工具进程 | tool-protocol / MCP |
 | 只改行为不改代码 | AGENTS.md + Skills + Hooks + Agent md |
 | 深度定制循环 | 不推荐 fork loop；优先 lifecycle + hooks |
