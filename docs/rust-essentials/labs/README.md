@@ -44,6 +44,7 @@ cargo run --locked \
 | [`select_cancel_drop`](./async-demos/src/bin/select_cancel_drop.rs) | timeout 后 `started`、`committed`、cleanup 三个状态各是什么？ | drop 会释放 Future 内字段，但不会自动回滚已经发生的外部副作用 |
 | [`watch_latest`](./async-demos/src/bin/watch_latest.rs) | 连发 1、2、3 后慢 receiver 会读几次、读到什么？相同值会不会通知？ | watch 保存最新状态和版本，不保存事件队列；最后一个 sender drop 后关闭 |
 | [`actor_request_reply`](./async-demos/src/bin/actor_request_reply.rs) | command 和结果分别走哪条 channel？谁拥有累计状态？ | 有界 mpsc 传命令、oneshot 传一次回复、显式 shutdown 后 join actor |
+| [`mini_session_actor`](./async-demos/src/bin/mini_session_actor.rs) | 第二条较快的 Prompt 会不会越过第一条？第一条运行时 Actor 能否回答 Status？ | mailbox、输入队列、单一 running turn、completion 回流、`select!` 和 shutdown flush 如何组成 Session 骨架 |
 | [`spawn_local_rc`](./async-demos/src/bin/spawn_local_rc.rs) | `Rc<RefCell<_>>` 为什么不能交给普通 `spawn`，这里却能共享？ | current-thread runtime 仍需 `LocalSet`；不依赖两个 task 的偶然调度顺序 |
 | [`timer_reset`](./async-demos/src/bin/timer_reset.rs) | 一个 `Sleep` 完成后怎样再次等待新 deadline？ | 循环外创建、`tokio::pin!`、`.as_mut()` 重借用和 `reset()` |
 | [`mutex_snapshot`](./async-demos/src/bin/mutex_snapshot.rs) | reader 停在第二个 `.await` 时，另一个 task 能否立刻取锁？ | 在小作用域内复制 owned snapshot，让 `MutexGuard` 在 await 前释放 |
@@ -52,7 +53,7 @@ cargo run --locked \
 
 ## 一键校验
 
-下面的命令会运行全部正常 Katas、确认六个反例按预期编译失败，并逐个运行八个 async demos：
+下面的命令会运行全部正常 Katas、确认六个反例按预期编译失败，并逐个运行九个 async demos：
 
 ```sh
 docs/rust-essentials/labs/check.sh

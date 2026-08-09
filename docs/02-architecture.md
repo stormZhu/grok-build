@@ -584,6 +584,8 @@ bin/protoc     # protoc 启动器
 
 ## 11. 下一步
 
+- 不知道该选哪条链路学习 → [14 项目学习地图](./14-project-learning-map.md)
+- 程序能编译但运行行为不对 → [15 运行时调试手册](./15-runtime-debugging-playbook.md)
 - 内层循环细节 → [03-agent-loop.md](./03-agent-loop.md)  
 - 上下文与压缩 → [04-context-management.md](./04-context-management.md)  
 - 接口清单 → [06-interfaces.md](./06-interfaces.md)  

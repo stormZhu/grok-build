@@ -4,6 +4,8 @@
 
 第一次进入本目录时，先做 [学习路线与能力自测](./00-learning-roadmap.md)。如果眼前代码“每个词都认识，整句却读不懂”，直接打开 [Rust 高密度语法解码](./20-syntax-decoder.md)；如果不知道一个名字来自哪里、应从哪个文件继续追，读 [模块、可见性与 API 导航](./21-modules-and-api-navigation.md)；遇到所有权、trait 或 `Send` 报错时使用 [编译器错误诊断地图](./23-compiler-error-atlas.md)。每学完一个语言主题，运行 [Rust 可运行实验](./labs/README.md) 获得编译器和运行时反馈；最后用 [仓库源码实验](./22-repository-reading-labs.md) 检验自己是否真的能独立阅读。
 
+准备从 Rust 机制切换到整个项目时，使用 [项目学习地图](../14-project-learning-map.md) 选择一条用户旅程；遇到“能编译但行为不对”时按 [运行时调试手册](../15-runtime-debugging-playbook.md) 从症状定位状态 owner 和等待边。
+
 ## 贡献者主路径
 
 按顺序阅读；读到异步部分后，可以一边读 [源码精读](../deep-dives/README.md) 中的 SessionActor 事件循环一边查阅专题。
@@ -62,7 +64,7 @@
 | [21 模块、可见性与 API 导航](./21-modules-and-api-navigation.md) | crate/module 边界、`mod`/`use`/`pub use`、源码跳转和依赖方向 |
 | [22 仓库源码实验](./22-repository-reading-labs.md) | 由浅入深的真实源码任务、产出模板、自检答案和毕业标准 |
 | [23 编译器错误诊断地图](./23-compiler-error-atlas.md) | 所有权、借用、类型推断、trait、dyn 与异步 `Send` 错误的系统排查方法 |
-| [Rust 可运行实验](./labs/README.md) | 13 个标准库 Katas、6 个 compile-fail 练习、8 个 Tokio async demos 与一键校验脚本 |
+| [Rust 可运行实验](./labs/README.md) | 13 个标准库 Katas、6 个 compile-fail 练习、9 个 Tokio async demos 与一键校验脚本 |
 
 ## 每篇文章的使用方法
 

@@ -371,6 +371,27 @@ Shutdown    = hooks、持久化、遥测和后台任务清理
 
 ## 10. 可执行练习
 
+先运行缩小后的 Session 骨架。它不依赖模型、网络、文件系统或项目业务类型，但保留 mailbox、排队、单个 running Turn、completion 回流、`select!` 和显式 shutdown：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_session_actor
+```
+
+源码见 [`mini_session_actor.rs`](../rust-essentials/labs/async-demos/src/bin/mini_session_actor.rs)。运行前预测：第二条 Prompt 的模拟耗时更短，它能否越过第一条？第一条仍在运行时，Actor 能否处理 `Status`？输出中的七个事件由内部断言固定，不能靠偶然调度“看起来正确”。
+
+| 缩小模型 | 生产源码中的对应物 |
+|---|---|
+| `mpsc::Sender<SessionCommand>` | `SessionHandle.cmd_tx` |
+| `pending_inputs` | Session state 的输入队列 |
+| `running_task` | 当前前台 `AgentTask` |
+| `maybe_start_running_task` | 同名生产 helper |
+| `completion_tx/rx` | `PromptTurnResult` 回到 actor loop |
+| `shutdown:flush` | hooks、replay、persistence、workflow 和 feedback 收尾的占位 |
+
+示例刻意省略了 admission、send-now、interjection、真实采样、工具、memory、MCP 和 durable storage。它证明事件循环骨架，不证明生产关闭协议的全部行为；随后再做下面三项源码练习。
+
 ### 练习 A：画出一次 Prompt
 
 从 `SessionHandle.cmd_tx` 开始，画出以下节点，并为每条箭头写出 channel 或函数名：

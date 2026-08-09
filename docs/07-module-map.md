@@ -221,6 +221,8 @@
 - [11 Rust × Agent 源码实验](./11-guided-exercises.md)
 - [12 Rust × Agent × 项目术语索引](./12-glossary.md)
 - [13 分阶段贡献项目](./13-contribution-projects.md)
+- [14 项目学习地图](./14-project-learning-map.md)
+- [15 运行时调试手册](./15-runtime-debugging-playbook.md)
 - [源码精读：用户消息流](./deep-dives/message-flow.md)
 - [源码精读：工具调用](./deep-dives/tool-call-pipeline.md)
 - [源码精读：权限与沙箱](./deep-dives/permissions-and-sandbox.md)

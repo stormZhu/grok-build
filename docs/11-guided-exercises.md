@@ -119,6 +119,11 @@ sequenceDiagram
 ### 操作
 
 ```sh
+# 先在 100 多行的确定性模型中观察同一骨架
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_session_actor
+
 rg -n "tokio::select!|SessionCommand::Prompt|SessionCommand::Cancel|Shutdown|completion_rx" \
   crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs
 cargo test -p xai-grok-shell run_session -- --nocapture
@@ -134,6 +139,8 @@ cargo test -p xai-grok-shell run_session -- --nocapture
 - `send_now` 取消的是谁；
 - shutdown 为什么要 flush replay buffer；
 - 哪些分支可以安全地让 `.await` 取消，哪些需要清理 guard。
+
+先把 `mini_session_actor` 中的 `SessionCommand`、`pending_inputs`、`running_task`、`completion_rx`、`maybe_start_running_task` 和 `shutdown:flush` 逐项映射到生产源码；无法映射的 memory、MCP、replay 和 fs watcher 分支，留到第二遍再读。
 
 ---
 

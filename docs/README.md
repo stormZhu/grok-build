@@ -33,6 +33,8 @@
 | [11-guided-exercises.md](./11-guided-exercises.md) | Rust 与 Agent 结合的源码实验：从 Actor、Prompt、Tool 到真实 turn 测试 |
 | [12-glossary.md](./12-glossary.md) | Rust、Agent、Prompt、协议、安全与项目 owner 的统一术语索引 |
 | [13-contribution-projects.md](./13-contribution-projects.md) | 从低风险文档/纯函数到 Tool、Session、协议、认证和扩展的阶段化贡献项目 |
+| [14-project-learning-map.md](./14-project-learning-map.md) | 项目学习地图：按一条用户旅程连接架构、源码、可运行实验和验证证据 |
+| [15-runtime-debugging-playbook.md](./15-runtime-debugging-playbook.md) | 运行时调试：从 Prompt、Turn、工具、取消、关闭和 UI 症状定位状态 owner |
 | [源码精读](./deep-dives/README.md) | 针对具体函数、控制流和子系统的专题阅读；包含完整消息流、采样、认证与模型选择、配置分层/运行时解析、工具调用、MCP 生命周期/dispatcher、Leader、子代理/Workflow、权限沙箱、Workspace rewind/worktree、扩展生命周期、Pager 渲染、持久化重放和可观测性时间线 |
 
 ---
@@ -59,22 +61,24 @@ Rust 基础薄弱或尚不能独立解释仓库中的组合类型、trait 和异
 10. **11 源码实验手册** — 把 Rust 概念和 Agent 运行时练习连起来
 11. **12 术语索引** — 遇到陌生词时先确认 Rust、Agent 和项目语义的对应关系
 12. **13 阶段化贡献项目** — 按风险递进完成从文档、纯函数到协议和跨 session 改动
-13. **源码精读 / message-flow** — 跟踪用户发送一条消息后的完整控制流
-14. **源码精读 / persistence-and-replay** — 理解 session 落盘、恢复、重放、rewind 和 fork
-15. **源码精读 / sampling-lifecycle** — 理解请求构建、流事件、重试与采样后如何接回工具循环
-16. **源码精读 / prompt-assembly** — 理解 Agent 定义、规则、skills 如何进入模型上下文
-17. **源码精读 / extensions-and-lifecycle** — 区分 hooks、plugins、skills、memory 与进程内 lifecycle 扩展的控制边界
-18. **源码精读 / leader-control-plane** — 理解多客户端如何共享 Agent Host，以及 IPC/版本/重连的边界
-19. **源码精读 / authentication-and-model-resolution** — 理解模型目录、凭据来源和 401 恢复为什么分层
-20. **源码精读 / subagents-and-workflows** — 理解 definition、fork/resume、隔离 worktree、Rhai journal 和 Workflow 状态机
-21. **源码精读 / mcp-dispatcher** — 理解 50ms 事件合并、client identity、防 stale close、ACP status 和自动恢复
-22. **源码精读 / configuration-and-runtime-resolution** — 理解配置层级、深度合并、requirements/MDM、campaign、远端 settings 和热刷新
-23. **源码精读 / workspace-state-and-worktree-lifecycle** — 理解文件快照、FS/git/hunk rewind、checkpoint durability 和 worktree 隔离
-24. **源码精读 / observability-and-trace-timeline** — 学会用关联 ID、span、unified log、firehose 和 OTLP 还原一次消息
-25. **源码精读 / contributor-workflow** — 学会按 owner 选测试、收集异步/协议证据并写出可审查改动
-26. **源码精读 / resources-and-capability-injection** — 理解工具依赖、session 能力、取消和持久化资源如何注入与重建
-27. **源码精读 / host-modes-and-entrypoints** — 区分 `grok -p`、relay headless、stdio 与 Leader 的真实入口和生命周期
-28. **源码精读 / cancellation-and-shutdown** — 理解取消、超时、replay flush、工具进程和子代理关闭的跨层不变量
+13. **14 项目学习地图** — 每次只选一条用户旅程，把文档、源码和验证连成闭环
+14. **15 运行时调试手册** — 学会从症状、owner 和等待边收集证据
+15. **源码精读 / message-flow** — 跟踪用户发送一条消息后的完整控制流
+16. **源码精读 / persistence-and-replay** — 理解 session 落盘、恢复、重放、rewind 和 fork
+17. **源码精读 / sampling-lifecycle** — 理解请求构建、流事件、重试与采样后如何接回工具循环
+18. **源码精读 / prompt-assembly** — 理解 Agent 定义、规则、skills 如何进入模型上下文
+19. **源码精读 / extensions-and-lifecycle** — 区分 hooks、plugins、skills、memory 与进程内 lifecycle 扩展的控制边界
+20. **源码精读 / leader-control-plane** — 理解多客户端如何共享 Agent Host，以及 IPC/版本/重连的边界
+21. **源码精读 / authentication-and-model-resolution** — 理解模型目录、凭据来源和 401 恢复为什么分层
+22. **源码精读 / subagents-and-workflows** — 理解 definition、fork/resume、隔离 worktree、Rhai journal 和 Workflow 状态机
+23. **源码精读 / mcp-dispatcher** — 理解 50ms 事件合并、client identity、防 stale close、ACP status 和自动恢复
+24. **源码精读 / configuration-and-runtime-resolution** — 理解配置层级、深度合并、requirements/MDM、campaign、远端 settings 和热刷新
+25. **源码精读 / workspace-state-and-worktree-lifecycle** — 理解文件快照、FS/git/hunk rewind、checkpoint durability 和 worktree 隔离
+26. **源码精读 / observability-and-trace-timeline** — 学会用关联 ID、span、unified log、firehose 和 OTLP 还原一次消息
+27. **源码精读 / contributor-workflow** — 学会按 owner 选测试、收集异步/协议证据并写出可审查改动
+28. **源码精读 / resources-and-capability-injection** — 理解工具依赖、session 能力、取消和持久化资源如何注入与重建
+29. **源码精读 / host-modes-and-entrypoints** — 区分 `grok -p`、relay headless、stdio 与 Leader 的真实入口和生命周期
+30. **源码精读 / cancellation-and-shutdown** — 理解取消、超时、replay flush、工具进程和子代理关闭的跨层不变量
 
 ---
 

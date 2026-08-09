@@ -39,6 +39,7 @@ async_demos=(
     select_cancel_drop
     watch_latest
     actor_request_reply
+    mini_session_actor
     spawn_local_rc
     timer_reset
     mutex_snapshot
