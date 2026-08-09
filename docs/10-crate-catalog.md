@@ -159,6 +159,8 @@ cargo tree -p xai-grok-shell --depth 1
 | `xai-grok-auth` | `crates/codegen/xai-grok-auth` | `HttpAuth` / credential provider 的依赖反转接口 | `src/lib.rs` |
 | `xai-grok-config-types` | `crates/codegen/xai-grok-config-types` | 无 I/O 的配置 value types | `src/lib.rs` |
 | `xai-grok-config` | `crates/codegen/xai-grok-config` | grok home、effective config、TOML merge | `src/lib.rs`, `src/loader.rs` |
+| shell config runtime | `crates/codegen/xai-grok-shell/src/agent/config.rs` + `src/util/config/resolve/` | typed Config、来源优先级、runtime-only 字段和 settings refresh | `agent/config.rs`, `config/reloader.rs`, `agent/mvp_agent/agent_ops.rs` |
+| `xai-grok-workspace` session/worktree | `crates/codegen/xai-grok-workspace/src/session/` + `src/worktree/` | workspace session、文件/hunk/git rewind、checkpoint mirror、隔离目录生命周期 | `session/file_state.rs`, `session/checkpoint.rs`, `worktree/mod.rs` |
 | `xai-grok-env` | `crates/codegen/xai-grok-env` | endpoint defaults、环境变量测试 preset | `src/lib.rs` |
 | `xai-grok-http` | `crates/codegen/xai-grok-http` | reqwest client、User-Agent 和 HTTP policy | `src/lib.rs` |
 | `xai-grok-extra-ca` | `crates/codegen/xai-grok-extra-ca` | `GROK_EXTRA_CA_BUNDLE`、DER 缓存和 reqwest adapter | `src/lib.rs` |
@@ -267,6 +269,8 @@ third-party 代码有独立许可证和变更通知要求。不要为了修一�
 | IDE/ACP 集成 | `xai-acp-lib/src/gateway.rs` | shell `mvp_agent/` + `session/acp_*` | ACP fixture / shell test |
 | MCP 工具发现/断线 | `xai-grok-mcp` | shell `session/.../mcp.rs` | MCP integration test |
 | MCP 状态事件/恢复竞态 | shell `session/mcp_dispatcher.rs` + `mcp_restart.rs` | `xai-grok-mcp/src/liveness.rs` | paused-clock dispatcher/e2e fixture；见 [`mcp-dispatcher`](./deep-dives/mcp-dispatcher.md) |
+| 配置值不生效/策略覆盖 | `xai-grok-config/src/loader.rs` + `validation.rs` | shell `agent/config.rs` + `util/config/resolve/` | layer/resolver precedence fixture；见 [`configuration-and-runtime-resolution`](./deep-dives/configuration-and-runtime-resolution.md) |
+| Agent 修改如何恢复 | `xai-grok-workspace/src/session/file_state.rs` + `checkpoint.rs` | `worktree/mod.rs` + `xai-hunk-tracker` | MockFs rewind + temp Git/JJ fixture；见 [`workspace-state-and-worktree-lifecycle`](./deep-dives/workspace-state-and-worktree-lifecycle.md) |
 | 文件编辑权限 | workspace `permission/` | tools edit implementation + sandbox | temp-dir permission test；见 [`permissions-and-sandbox`](./deep-dives/permissions-and-sandbox.md) |
 | worktree/fork | `xai-fast-worktree` | shell `spawn.rs` / workspace worktree | fork/worktree e2e |
 | TUI 布局或滚动 | pager `src/views/` / `scrollback/` | pager PTY harness | render/snapshot/PTY；见 [`pager-rendering`](./deep-dives/pager-rendering.md) |

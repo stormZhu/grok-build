@@ -446,7 +446,9 @@ Owner：哪个 actor/crate 拥有权威状态？
 | Rust async/actor | `rust-essentials/08`–`17`、shell `run_loop.rs`、[`sampling-lifecycle.md`](./deep-dives/sampling-lifecycle.md) |
 | Agent 行为和 prompt | `05-prompt-engineering.md`、[`prompt-assembly.md`](./deep-dives/prompt-assembly.md)、`xai-grok-agent/src/prompt/` |
 | 工具和安全 | `deep-dives/tool-call-pipeline.md`、workspace permission、sandbox |
+| Workspace 状态和隔离 | [`workspace-state-and-worktree-lifecycle.md`](./deep-dives/workspace-state-and-worktree-lifecycle.md)、`xai-grok-workspace/src/session/`、`src/worktree/`、`xai-hunk-tracker` |
 | 子代理和 Workflow | [`subagents-and-workflows.md`](./deep-dives/subagents-and-workflows.md)、`xai-grok-subagent-resolution`、`xai-workflow`、shell `agent/subagent/` 与 `session/workflow/` |
+| 配置和策略 | [`configuration-and-runtime-resolution.md`](./deep-dives/configuration-and-runtime-resolution.md)、`xai-grok-config/src/loader.rs`、`validation.rs`、shell `agent/config.rs` |
 | 长会话和 memory | `04-context-management.md`、compaction、memory crate |
 | ACP/MCP 集成 | `06-interfaces.md`、`xai-acp-lib`、`xai-grok-mcp`、[`mcp-lifecycle.md`](./deep-dives/mcp-lifecycle.md)、[`mcp-dispatcher.md`](./deep-dives/mcp-dispatcher.md) |
 | TUI/终端 | `xai-grok-pager`、markdown、PTY harness、ratatui crates |

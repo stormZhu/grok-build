@@ -165,6 +165,8 @@ _ = &mut idle_flush_sleep, if 条件A && 条件B => { ... }
 
 ## 10.6 模式匹配接收返回值
 
+`模式 = future表达式` 中的“模式”不是普通赋值，而是 Rust 的**模式匹配**：future 完成后，把它的返回值交给左边的模式。如果匹配成功，就进入 `=>` 后面的处理块。
+
 ```rust
 // 忽略返回值
 _ = some_future() => { ... }
@@ -178,6 +180,53 @@ result = some_future() => {
 Ok(data) = fallible_future() => { ... }
 Err(e) = fallible_future() => { ... }
 ```
+
+### 变量什么时候可以使用？
+
+模式中的变量只有在 future 完成、模式匹配成功并进入处理块后才会绑定。因此，它从 `=> {` 开始可用，到这个处理块结束为止：
+
+```rust
+tokio::select! {
+    message = receiver.recv() => {
+        println!("收到: {message}"); // 可以使用 message
+    }
+
+    _ = cancel.cancelled() => {
+        // 这里不能使用 message：这是另一个分支
+    }
+}
+```
+
+变量不能在 `if` 守卫中使用，因为守卫是在等待 future **之前**判断的，此时还没有返回值：
+
+```rust
+tokio::select! {
+    // 错误示例：message 尚未产生
+    message = receiver.recv(), if message.is_some() => { ... }
+}
+```
+
+变量也不会自动带出 `select!`。如果后面的代码需要它，让 `select!` 的分支返回这个值：
+
+```rust
+let message = tokio::select! {
+    message = receiver.recv() => message,
+    _ = cancel.cancelled() => return,
+};
+
+println!("收到: {message}"); // 现在可以在 select! 外使用
+```
+
+常见模式的含义：
+
+```rust
+_ = sleep(...) => { ... }              // 匹配任何值，但忽略返回值
+result = some_future() => { ... }      // 绑定完整返回值
+Ok(data) = read_file() => { ... }      // 只匹配 Ok，并取出 data
+Some(message) = receiver.recv() => { ... } // 只匹配 Some，并取出 message
+```
+
+如果模式不匹配，该分支在本次 `select!` 调用中会被跳过，继续等待其他分支。例如 `Some(message)` 不会匹配 channel 关闭时的 `None`。
 
 ## 10.7 取消安全与公平性
 

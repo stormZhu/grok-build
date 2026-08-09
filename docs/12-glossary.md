@@ -64,6 +64,11 @@ flowchart LR
 | 术语 | 通俗解释 | 本项目中的准确语义 | 源码入口 / 延伸阅读 |
 |---|---|---|---|
 | Session | 一段可恢复的长期交互 | 包含 `SessionActor`、conversation、工具/权限上下文、session id 和持久化目录 | [`acp_session.rs`](../crates/codegen/xai-grok-shell/src/session/acp_session.rs)、[persistence-and-replay](./deep-dives/persistence-and-replay.md) |
+| `WorkspaceSession` | 一个 session 在 workspace 侧的资源容器 | 绑定 cwd、toolset、terminal、MCP、文件/hunk tracker 和 checkpoint；Local/Proxy 两种拓扑都以它为 owner | [`session/mod.rs`](../crates/codegen/xai-grok-workspace/src/session/mod.rs)、[workspace-state-and-worktree-lifecycle](./deep-dives/workspace-state-and-worktree-lifecycle.md) |
+| `WorkspaceOps` | local 调用和 workspace RPC 的统一适配器 | Local 直接 `execute`，Proxy 走 `WorkspaceClient`；它不复制 workspace 状态 | [`workspace_ops.rs`](../crates/codegen/xai-grok-workspace/src/workspace_ops.rs)、[workspace-state-and-worktree-lifecycle](./deep-dives/workspace-state-and-worktree-lifecycle.md) |
+| `FileStateTracker` | 按 prompt 记录文件 before/after 快照的 tracker | 用于检测外部修改并执行 FS rewind；相对 cwd 存储路径，历史数据兼容绝对路径 | [`file_state.rs`](../crates/codegen/xai-grok-workspace/src/session/file_state.rs)、[workspace-state-and-worktree-lifecycle](./deep-dives/workspace-state-and-worktree-lifecycle.md) |
+| `RewindCheckpoint` | 同一 prompt 的多 domain checkpoint | 将 FS `RewindPoint` 与可选 hunk delta 对齐；git state 由旁路 `GitCheckpointStore` 管理 | [`checkpoint.rs`](../crates/codegen/xai-grok-workspace/src/session/checkpoint.rs)、[workspace-state-and-worktree-lifecycle](./deep-dives/workspace-state-and-worktree-lifecycle.md) |
+| worktree | 一个隔离的源码工作目录 | workspace 负责 Git/JJ 创建、dirty/clean 复制、apply conflict 和清理；shell 另负责 session/auth 编排 | [`worktree/mod.rs`](../crates/codegen/xai-grok-workspace/src/worktree/mod.rs)、[workspace-state-and-worktree-lifecycle](./deep-dives/workspace-state-and-worktree-lifecycle.md) |
 | Turn | 从一条 prompt 开始到本轮完成/取消/失败的边界 | `handle_prompt` 启动一轮；本轮可包含多次采样和多个工具调用 | [`turn.rs`](../crates/codegen/xai-grok-shell/src/session/acp_session_impl/turn.rs)、[03-agent-loop](./03-agent-loop.md) |
 | Agent Loop | 模型决定下一步、宿主执行、结果再喂回模型的循环 | `SessionActor` 负责策略和生命周期，`ChatStateActor` 负责历史，直到模型给出终止文本或遇到错误 | [message-flow](./deep-dives/message-flow.md)、[03-agent-loop](./03-agent-loop.md) |
 | sampling | 向模型发送上下文并接收增量输出 | `SamplerActor` 管理 HTTP 请求、SSE 解析、重试、取消和完成通知 | [`xai-grok-sampler/src/actor`](../crates/codegen/xai-grok-sampler/src/actor)、[sampling-lifecycle](./deep-dives/sampling-lifecycle.md) |
@@ -86,6 +91,14 @@ flowchart LR
 | fork | 从现有 session 复制出可独立继续的分支 | 复制 session 数据到新 id/cwd，记录 parent；之后两个 session 的新事件互不共享 | [`fork.rs`](../crates/codegen/xai-grok-shell/src/session/fork.rs)、[persistence-and-replay](./deep-dives/persistence-and-replay.md) |
 | durable | 已跨越明确持久化边界，崩溃后可恢复 | `FlushAndAck` 返回后才可把对应 update 当作 durable；UI 已显示不代表 durable | [`storage/mod.rs`](../crates/codegen/xai-grok-shell/src/session/storage/mod.rs) |
 | derived cache | 可由更权威数据重新生成的加速文件 | `chat_history.jsonl` 是从 updates/消息重建的 cache；损坏时可 rebuild，不等同于审计日志 | [`chat_rebuild`](../crates/codegen/xai-grok-shell/src/session/storage/mod.rs)、[persistence-and-replay](./deep-dives/persistence-and-replay.md) |
+| `ConfigLayers` | 把多个配置来源按信任顺序组织起来的加载结果 | 持有 system/user managed、user config、requirements 和 MDM；负责基础 TOML 合并，不负责 Agent turn | [`loader.rs`](../crates/codegen/xai-grok-config/src/loader.rs)、[configuration-and-runtime-resolution](./deep-dives/configuration-and-runtime-resolution.md) |
+| effective config | 当前来源和 overlay 叠加后的配置文档 | `effective_config_base` 加上可选 campaign；它仍是 `toml::Value`，必须再经过 typed/runtime 解析 | [`util/config/campaigns.rs`](../crates/codegen/xai-grok-shell/src/util/config/campaigns.rs)、[configuration-and-runtime-resolution](./deep-dives/configuration-and-runtime-resolution.md) |
+| requirements | 管理员/部署强制层 | 优先级高于普通配置；可 pin feature，不能被低信任 campaign 或 remote 默认重新打开 | [`validation.rs`](../crates/codegen/xai-grok-config/src/validation.rs)、[permissions-and-sandbox](./deep-dives/permissions-and-sandbox.md) |
+| `version_overrides` | 按 CLI semver 条件选择的 TOML patch | 每层独立应用、按最低版本升序深度合并，完成后 section 被剥离 | [`version_overrides.rs`](../crates/codegen/xai-grok-config/src/version_overrides.rs)、[configuration-and-runtime-resolution](./deep-dives/configuration-and-runtime-resolution.md) |
+| campaign | 可 dismiss 的实验/配置 overlay | 依照 requirements > remote > user > managed > system managed 合并；应用后再次恢复 requirements | [`campaigns.rs`](../crates/codegen/xai-grok-config/src/campaigns.rs)、[configuration-and-runtime-resolution](./deep-dives/configuration-and-runtime-resolution.md) |
+| runtime resolution | 把 raw config、CLI、env、headless 和 remote 转成派生字段的阶段 | `Config::resolve_runtime_fields` 只重算明确列出的 runtime-only 字段，不是全量 serde reload | [`agent/config.rs`](../crates/codegen/xai-grok-shell/src/agent/config.rs)、[configuration-and-runtime-resolution](./deep-dives/configuration-and-runtime-resolution.md) |
+| `Resolved<T>` / `ConfigSource` | 带来源的解析结果 | 除最终 value 外记录 env/config/managed/requirements/remote/default 等 source，供诊断和 UI 解释 | [`xai-grok-config-types/src/flags.rs`](../crates/codegen/xai-grok-config-types/src/flags.rs)、[`config.rs`](../crates/codegen/xai-grok-shell/src/agent/config.rs) |
+| `RemoteSettings` | 认证后从 `/v1/settings` 获得的服务端设置快照 | 只能进入明确接入它的 resolver；刷新后新 session 可获得新派生值，已有 session 通常保留 snapshot | [`agent_ops.rs`](../crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs)、[configuration-and-runtime-resolution](./deep-dives/configuration-and-runtime-resolution.md) |
 
 ## Prompt 与上下文
 
@@ -165,6 +178,7 @@ flowchart LR
 | `ToolBridge` | finalized tool registry、schema、dispatch 入口 | 新工具、MCP registration、tool result 映射 | [`bridge.rs`](../crates/codegen/xai-grok-tools/src/bridge.rs)、[`registry`](../crates/codegen/xai-grok-tools/src/registry) |
 | permission / workspace | access 分类、路径/命令决策、sandbox/worktree | 新风险类型、权限提示、隔离行为 | [`permission`](../crates/codegen/xai-grok-workspace/src/permission)、[`workspace/lib.rs`](../crates/codegen/xai-grok-workspace/src/lib.rs) |
 | `StorageAdapter` / JSONL | durable update、chat cache、replay/fork 文件语义 | 新事件、恢复、重放、磁盘错误处理 | [`storage`](../crates/codegen/xai-grok-shell/src/session/storage) |
+| `xai-grok-config` / `AgentConfig` | 配置来源、类型和运行时 gate | `xai-grok-config` 决定哪些 TOML 进入有效配置；shell `AgentConfig` 决定字段何时解析并应用到 Agent/session | [`loader.rs`](../crates/codegen/xai-grok-config/src/loader.rs)、[`agent/config.rs`](../crates/codegen/xai-grok-shell/src/agent/config.rs)、[configuration-and-runtime-resolution](./deep-dives/configuration-and-runtime-resolution.md) |
 | Pager render | 可见的 UI block、布局、scrollback | 终端显示、折叠、流式合并和 selection | [`xai-grok-pager-render/src`](../crates/codegen/xai-grok-pager-render/src)、[pager-rendering](./deep-dives/pager-rendering.md) |
 
 ## 典型症状到术语
@@ -172,11 +186,13 @@ flowchart LR
 | 现象 | 先区分的术语 | 推荐阅读 |
 |---|---|---|
 | UI 已显示答案，但恢复后不见 | display update vs durable update vs `ReplayBuffer` | [persistence-and-replay](./deep-dives/persistence-and-replay.md) |
+| Agent 改动无法安全 rewind | before/after snapshot、checkpoint domain、外部冲突、hunk delta | [workspace-state-and-worktree-lifecycle](./deep-dives/workspace-state-and-worktree-lifecycle.md) |
 | 模型说有工具，但调用失败 | tool definition vs registry vs permission vs dispatch | [tool-call-pipeline](./deep-dives/tool-call-pipeline.md) |
 | MCP 已连接但模型看不到工具 | transport connection vs `ToolBridge` registration vs reminder/snapshot | [mcp-lifecycle](./deep-dives/mcp-lifecycle.md) |
 | 改了 prompt 却行为没变 | `AgentDefinition`、`PromptMode`、audience、最终 request | [prompt-assembly](./deep-dives/prompt-assembly.md) |
 | 一次请求偶尔重复/超时 | `SamplingEvent`、attempt、retry、cancel、stream-drain | [sampling-lifecycle](./deep-dives/sampling-lifecycle.md) |
 | 子代理读到不该看的规则 | `PromptAudience`、scope、worktree、权限 | [prompt-assembly](./deep-dives/prompt-assembly.md)、[permissions-and-sandbox](./deep-dives/permissions-and-sandbox.md) |
+| 配置明明写了却不生效 | effective TOML、unknown warning、resolver precedence、requirements pin、session snapshot | [configuration-and-runtime-resolution](./deep-dives/configuration-and-runtime-resolution.md) |
 | rewind 后旧消息仍出现在客户端 | raw updates vs rewind marker vs replay filter | [persistence-and-replay](./deep-dives/persistence-and-replay.md) |
 | 文档改动是否需要构建 | source code change vs Markdown-only static checks | [contributor-workflow](./deep-dives/contributor-workflow.md) |
 

@@ -9,6 +9,8 @@
 - [09-contributor-playbook.md](./09-contributor-playbook.md)：改动前的 owner 和测试原则；
 - [deep-dives/contributor-workflow.md](./deep-dives/contributor-workflow.md)：fixture、异步取消和协议证据。
 - [deep-dives/subagents-and-workflows.md](./deep-dives/subagents-and-workflows.md)：definition、fork/resume、隔离 worktree、Rhai journal 和 Workflow 状态机。
+- [deep-dives/configuration-and-runtime-resolution.md](./deep-dives/configuration-and-runtime-resolution.md)：配置层级、requirements/MDM、campaign、来源优先级和 settings refresh。
+- [deep-dives/workspace-state-and-worktree-lifecycle.md](./deep-dives/workspace-state-and-worktree-lifecycle.md)：WorkspaceSession、rewind checkpoint、hunk/git 恢复和 worktree 隔离。
 
 ## 1. 统一交付标准
 
@@ -222,6 +224,7 @@ HTTP body/header/path -> SSE bytes -> SamplingEvent order -> retry decision -> S
 - `crates/codegen/xai-grok-shell/src/agent/update_chunk_merge.rs`
 - [run-session.md](./deep-dives/run-session.md)
 - [persistence-and-replay.md](./deep-dives/persistence-and-replay.md)
+- [workspace-state-and-worktree-lifecycle.md](./deep-dives/workspace-state-and-worktree-lifecycle.md)
 
 ### 先画状态图
 
@@ -246,6 +249,8 @@ stateDiagram-v2
 - `ReplayBuffer` 和 persistence flush 有可等待的 ack；
 - 队列中的下一条 prompt 不会因旧 turn 残留状态被吞掉；
 - replay/resume 看到的状态与 ChatState/durable updates 一致。
+
+如果改动涉及文件编辑、rewind 或 fork，继续沿 Workspace 专题追踪 `FileStateTracker`、`RewindCheckpoint` 和 worktree lifecycle；不要只在 SessionActor 里修改路径字符串。
 
 ### 风险边界
 
@@ -324,7 +329,34 @@ producer -> serde/wire -> transport -> old client/file
 
 一条好的说明会明确写“没有构建，因为本次只改 Markdown”或“运行了目标 crate 测试，因为改了 Rust 的 retry 分类”，而不是笼统地说“已验证”。
 
-## 11. 推荐顺序和暂停点
+## 11. 配置专项：让一个 feature gate 可解释、可刷新
+
+### 目标
+
+选择一个现有或待增加的布尔 feature，完整追踪“配置文件 -> typed Config -> runtime resolver -> Agent/session”。重点不是把 `true/false` 接通，而是让贡献者能回答来源、强制策略和生效时机。
+
+### 推荐入口
+
+- [configuration-and-runtime-resolution.md](./deep-dives/configuration-and-runtime-resolution.md)
+- `crates/codegen/xai-grok-config/src/loader.rs`
+- `crates/codegen/xai-grok-config/src/validation.rs`
+- `crates/codegen/xai-grok-shell/src/agent/config.rs`
+- `crates/codegen/xai-grok-shell/src/util/config/resolve/features.rs`
+- `crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs`
+
+### 最小交付
+
+1. 写出该字段的优先级表：requirements、managed、user config、env、CLI、remote、default；没有的层明确标为“不支持”；
+2. 复用 `BoolFlag`/`Resolved` 或已有纯 resolver，保留 `ConfigSource`；
+3. 覆盖“用户值 vs managed/requirements”“本地值 vs remote”“interactive vs headless”三组冲突；
+4. 说明文件热加载、下一个 `/new` 和重启分别何时生效；
+5. 若只改文档，执行 `git diff --check` 和链接检查，不运行 Cargo build。
+
+### 失败问题
+
+用一个最小报告说明：为什么某个看似更高的来源不能覆盖它，为什么当前 session 仍可能使用旧 snapshot，以及如何通过 `Resolved<T>::source` 或 warning 定位。
+
+## 12. 推荐顺序和暂停点
 
 ```text
 项目 0 文档导航

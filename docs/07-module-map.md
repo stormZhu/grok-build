@@ -134,6 +134,8 @@
 | 路径 | 说明 |
 |------|------|
 | `crates/codegen/xai-grok-workspace/src/lib.rs` | 工作区总模块 |
+| `crates/codegen/xai-grok-workspace/src/session/` | per-session toolset、文件状态、checkpoint、git/jj 边界 |
+| `crates/codegen/xai-grok-workspace/src/worktree/` | Git/JJ worktree 创建、复制、应用、删除与回收 |
 | `.../permission/` | 权限决策 |
 | `.../file_system/` | FS 抽象与索引 |
 | `.../session/` | workspace session、git/jj、file_state |
@@ -155,6 +157,8 @@
 | `crates/codegen/xai-prompt-queue/` | 提示队列线类型 |
 | `crates/codegen/xai-grok-plugin-marketplace/` | 插件市场 |
 | `crates/codegen/xai-grok-config/` | 配置加载 |
+| `crates/codegen/xai-grok-shell/src/agent/config.rs` | typed Config、配置 warning、CLI/env/remote runtime resolution |
+| `crates/codegen/xai-grok-shell/src/util/config/resolve/` | 按功能拆分的 feature、权限、MCP、compaction、worktree resolver |
 | `crates/codegen/xai-grok-models/` | 默认模型表 |
 | `crates/codegen/xai-grok-telemetry/` | 遥测与 unified log |
 | `crates/codegen/xai-grok-update/` | 自更新 |
@@ -195,6 +199,8 @@
 | 加一种工具 | `xai-tool-runtime` trait + `implementations/grok_build` + registry |
 | 加一种 Agent 人格 | `.grok/agents/*.md` 或 `AgentBuilder` |
 | 理解权限 | `workspace/permission` + plan gate in `tool_calls.rs` |
+| 理解文件恢复 | `workspace/src/session/file_state.rs` + `checkpoint.rs` + `xai-hunk-tracker` |
+| 理解 worktree 隔离 | `workspace/src/worktree/mod.rs` + `xai-fast-worktree` + shell `spawn.rs` |
 | 理解子代理 | `spawn.rs` + `subagent_prompt.md` + `subagent_coordinator` |
 
 ---
@@ -215,6 +221,7 @@
 - [源码精读：用户消息流](./deep-dives/message-flow.md)
 - [源码精读：工具调用](./deep-dives/tool-call-pipeline.md)
 - [源码精读：权限与沙箱](./deep-dives/permissions-and-sandbox.md)
+- [源码精读：Workspace 状态与 Worktree 生命周期](./deep-dives/workspace-state-and-worktree-lifecycle.md)
 - [源码精读：Pager 渲染](./deep-dives/pager-rendering.md)
 - [源码精读：MCP 生命周期](./deep-dives/mcp-lifecycle.md)
 - [源码精读：MCP Dispatcher](./deep-dives/mcp-dispatcher.md)
@@ -224,5 +231,6 @@
 - [源码精读：扩展与生命周期](./deep-dives/extensions-and-lifecycle.md)
 - [源码精读：Leader 控制面](./deep-dives/leader-control-plane.md)
 - [源码精读：认证与模型选择](./deep-dives/authentication-and-model-resolution.md)
+- [源码精读：配置加载与运行时解析](./deep-dives/configuration-and-runtime-resolution.md)
 - [源码精读：子代理与 Workflow](./deep-dives/subagents-and-workflows.md)
 - [源码精读：贡献者工作流](./deep-dives/contributor-workflow.md)
