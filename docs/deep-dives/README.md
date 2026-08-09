@@ -9,5 +9,6 @@
 - [tool-call-pipeline.md](./tool-call-pipeline.md)：从模型工具调用追到权限、注册表、流式执行、结果回写与下一次采样。
 - [permissions-and-sandbox.md](./permissions-and-sandbox.md)：`AccessKind`、权限策略、YOLO/auto、plan gate 与 OS sandbox 的安全边界。
 - [pager-rendering.md](./pager-rendering.md)：ACP `SessionUpdate` 如何增量合并为 `RenderBlock`，再由 scrollback/layout 渲染到终端。
+- [mcp-lifecycle.md](./mcp-lifecycle.md)：MCP 配置、连接、工具发现、snapshot/reminder、调用、OAuth 和断线恢复。
 
 后续适合放入本目录的主题包括采样循环、MCP dispatcher 和上下文压缩等。

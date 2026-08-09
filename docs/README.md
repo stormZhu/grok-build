@@ -28,7 +28,7 @@
 | [09-contributor-playbook.md](./09-contributor-playbook.md) | 开发实战：按改动类型定位、测试、调试、兼容性与代码审查 |
 | [10-crate-catalog.md](./10-crate-catalog.md) | 依据 workspace metadata 的全 crate 目录、功能反查与贡献者导航 |
 | [11-guided-exercises.md](./11-guided-exercises.md) | Rust 与 Agent 结合的源码实验：从 Actor、Prompt、Tool 到真实 turn 测试 |
-| [源码精读](./deep-dives/README.md) | 针对具体函数、控制流和子系统的专题阅读；包含完整消息流、`run_session`、工具调用、权限沙箱与 Pager 渲染 |
+| [源码精读](./deep-dives/README.md) | 针对具体函数、控制流和子系统的专题阅读；包含完整消息流、`run_session`、工具调用、MCP、权限沙箱与 Pager 渲染 |
 
 ---
 

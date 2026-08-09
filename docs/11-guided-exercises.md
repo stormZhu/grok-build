@@ -402,7 +402,7 @@ Owner：哪个 actor/crate 拥有权威状态？
 | Agent 行为和 prompt | `05-prompt-engineering.md`、`xai-grok-agent/src/prompt/` |
 | 工具和安全 | `deep-dives/tool-call-pipeline.md`、workspace permission、sandbox |
 | 长会话和 memory | `04-context-management.md`、compaction、memory crate |
-| ACP/MCP 集成 | `06-interfaces.md`、`xai-acp-lib`、`xai-grok-mcp` |
+| ACP/MCP 集成 | `06-interfaces.md`、`xai-acp-lib`、`xai-grok-mcp`、[`mcp-lifecycle.md`](./deep-dives/mcp-lifecycle.md) |
 | TUI/终端 | `xai-grok-pager`、markdown、PTY harness、ratatui crates |
 | 代码索引和 workspace | `xai-codebase-graph`、fsnotify、fast-worktree、hunk tracker |
 

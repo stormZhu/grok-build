@@ -198,3 +198,4 @@
 - [源码精读：工具调用](./deep-dives/tool-call-pipeline.md)
 - [源码精读：权限与沙箱](./deep-dives/permissions-and-sandbox.md)
 - [源码精读：Pager 渲染](./deep-dives/pager-rendering.md)
+- [源码精读：MCP 生命周期](./deep-dives/mcp-lifecycle.md)
