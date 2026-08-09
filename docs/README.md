@@ -28,7 +28,7 @@
 | [09-contributor-playbook.md](./09-contributor-playbook.md) | 开发实战：按改动类型定位、测试、调试、兼容性与代码审查 |
 | [10-crate-catalog.md](./10-crate-catalog.md) | 依据 workspace metadata 的全 crate 目录、功能反查与贡献者导航 |
 | [11-guided-exercises.md](./11-guided-exercises.md) | Rust 与 Agent 结合的源码实验：从 Actor、Prompt、Tool 到真实 turn 测试 |
-| [源码精读](./deep-dives/README.md) | 针对具体函数、控制流和子系统的专题阅读；包含完整消息流、`run_session`、工具调用、MCP、权限沙箱与 Pager 渲染 |
+| [源码精读](./deep-dives/README.md) | 针对具体函数、控制流和子系统的专题阅读；包含完整消息流、`run_session`、工具调用、MCP、权限沙箱、Pager 渲染与持久化重放 |
 
 ---
 
@@ -51,6 +51,7 @@
 9. **10 Crate 全目录** — 从 workspace package 反查职责、入口和验证命令
 10. **11 源码实验手册** — 把 Rust 概念和 Agent 运行时练习连起来
 11. **源码精读 / message-flow** — 跟踪用户发送一条消息后的完整控制流
+12. **源码精读 / persistence-and-replay** — 理解 session 落盘、恢复、重放、rewind 和 fork
 
 ---
 

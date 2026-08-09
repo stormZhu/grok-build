@@ -34,6 +34,12 @@
 | `.../session/acp_session_impl/mcp.rs` | MCP 会话集成 |
 | `.../session/compaction.rs` | 主机侧 compact 触发与编排 |
 | `.../session/persistence.rs` | 会话落盘 |
+| `.../session/chat_persistence.rs` | `ChatState` 到 `PersistenceMsg` 的适配 |
+| `.../session/storage/mod.rs` | storage trait、提交错误语义、replay/rewind filter |
+| `.../session/storage/jsonl/mod.rs` | JSONL session 目录、append、durability、恢复 |
+| `.../session/storage/mod.rs` 的 `chat_rebuild` 模块 | 从 `updates.jsonl` 重建 `chat_history.jsonl` |
+| `.../session/replay_events.rs` | 客户端通知事件和 replay flush ack |
+| `.../agent/update_chunk_merge.rs` | 内存 `ReplayBuffer` 的 chunk 合并与限频 |
 | `.../session/plan_mode.rs` | Plan mode 状态 |
 | `.../session/slash_commands.rs` | 斜杠命令 |
 | `.../auth/` | OAuth / OIDC / API key / refresh |
@@ -175,6 +181,9 @@
 | 跟 tool call | `tool_calls.rs` + `bridge.rs` |
 | 看发给模型的 JSON 形态 | `sampling-types/conversation.rs` + `request_builder.rs` |
 | 看压缩如何换历史 | `code_compaction/*` + `session/compaction.rs` |
+| 看 session 如何落盘/恢复 | `session/persistence.rs` + `session/storage/jsonl/` |
+| 看 replay 如何处理 rewind 分支 | `session/storage/mod.rs` + `session/acp_session_impl/rewind.rs` |
+| 看客户端 chunk 为什么会合并 | `agent/update_chunk_merge.rs` + `session/replay_events.rs` |
 | 接 IDE | ACP：`mvp_agent/acp_agent.rs` + user-guide `15-agent-mode.md` |
 | 加一种工具 | `xai-tool-runtime` trait + `implementations/grok_build` + registry |
 | 加一种 Agent 人格 | `.grok/agents/*.md` 或 `AgentBuilder` |
@@ -199,3 +208,4 @@
 - [源码精读：权限与沙箱](./deep-dives/permissions-and-sandbox.md)
 - [源码精读：Pager 渲染](./deep-dives/pager-rendering.md)
 - [源码精读：MCP 生命周期](./deep-dives/mcp-lifecycle.md)
+- [源码精读：会话持久化与重放](./deep-dives/persistence-and-replay.md)

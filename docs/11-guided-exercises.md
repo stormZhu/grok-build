@@ -8,7 +8,7 @@
 - **操作**：尽量使用现有测试和命令；
 - **完成证据**：怎样证明自己真的理解，而不是只看过代码。
 
-建议按顺序完成 0→6。每个实验都可以在不接入真实模型、不使用真实 API key 的情况下完成。
+建议按顺序完成 0→10。每个实验都可以在不接入真实模型、不使用真实 API key 的情况下完成。
 
 ---
 
@@ -135,7 +135,47 @@ cargo test -p xai-grok-shell run_session -- --nocapture
 
 ---
 
-## 3. 从 prompt 模板到最终 System Prompt
+## 3. 追踪 session 持久化、恢复和 replay
+
+### Rust 目标
+
+理解 trait object、消息顺序、oneshot barrier、文件 I/O 的提交边界，以及 JSONL 的 append-only 与原子 replace 的差异。
+
+### Agent 目标
+
+区分 durable `updates.jsonl`、可替换的 `chat_history.jsonl` 和只存在于内存的 `ReplayBuffer`，能够解释 crash、磁盘满、compaction、rewind 与 fork 的行为。
+
+### 源码入口
+
+- [deep-dives/persistence-and-replay.md](./deep-dives/persistence-and-replay.md)
+- `crates/codegen/xai-grok-shell/src/session/persistence.rs`
+- `crates/codegen/xai-grok-shell/src/session/storage/mod.rs`
+- `crates/codegen/xai-grok-shell/src/session/storage/jsonl/mod.rs`
+- `crates/codegen/xai-grok-shell/src/session/storage/mod.rs` 中的 `chat_rebuild` 模块
+- `crates/codegen/xai-grok-shell/src/agent/update_chunk_merge.rs`
+
+### 操作
+
+```sh
+rg -n "PersistenceMsg::(Chat|Update|FlushAndAck|ReplaceChatHistory)|AppendUpdateError" \
+  crates/codegen/xai-grok-shell/src/session
+rg -n "filter_rewind_(lines|updates)|load_updates_for_replay|collect_prompts_from_events" \
+  crates/codegen/xai-grok-shell/src/session/storage/mod.rs
+rg -n "ReplayBuffer|replay_buffer\.flush|FlushReplay" \
+  crates/codegen/xai-grok-shell/src/agent crates/codegen/xai-grok-shell/src/session
+```
+
+只读测试 fixture 和临时目录相关测试，画出以下三个结果：
+
+1. 两轮 prompt 后执行 compaction，哪些数据仍在 `updates.jsonl`？
+2. 追加 `RewindMarker(target_prompt_index = 1)` 后，raw filter 如何删除旧分支？
+3. 在 JSONL 尾部留下半行 JSON，为什么下一次 load 仍能恢复前面的记录？
+
+### 完成证据
+
+写一张表区分 `NotCommitted`、`Committed`、`Flush` 和 `FlushAndAck`。再回答：为什么 `replace_history` 可以改 `chat_history.jsonl`，却不能把 request-level pruning 当作永久历史删除？为什么 turn completion 和 shutdown 必须 flush `ReplayBuffer`？
+
+## 4. 从 prompt 模板到最终 System Prompt
 
 ### Rust 目标
 
@@ -184,7 +224,7 @@ Return findings ordered by severity.
 
 ---
 
-## 4. 实现一个只读 Tool 的类型边界
+## 5. 实现一个只读 Tool 的类型边界
 
 ### Rust 目标
 
@@ -231,7 +271,7 @@ JSON args -> Args -> Tool::execute -> Progress* -> Terminal -> ToolRunResult
 
 ---
 
-## 5. 观察一次采样和一次重试
+## 6. 观察一次采样和一次重试
 
 ### Rust 目标
 
@@ -276,7 +316,7 @@ ConversationRequest
 
 ---
 
-## 6. 让上下文预算成为可解释的数字
+## 7. 让上下文预算成为可解释的数字
 
 ### Rust 目标
 
@@ -316,7 +356,7 @@ rg -n "should_prune|soft_trim|hard_clear|context_window|MAX_REQUEST_BYTES" \
 
 ---
 
-## 7. 用 fake host 测试一个 Agent turn
+## 8. 用 fake host 测试一个 Agent turn
 
 ### Rust 目标
 
@@ -356,7 +396,7 @@ Pager queue -> ACP transport -> SessionCommand
 
 ---
 
-## 8. 做一次真正的小改动
+## 9. 做一次真正的小改动
 
 选择一个低风险改动：错误文案、日志字段、已有工具 schema 的描述、一个 prompt 渲染边界或一个纯函数 bug。遵循 [09-contributor-playbook.md](./09-contributor-playbook.md)：
 
@@ -392,9 +432,9 @@ Owner：哪个 actor/crate 拥有权威状态？
 
 ---
 
-## 9. 继续深入的分流
+## 10. 继续深入的分流
 
-完成实验 0–8 后按兴趣选择：
+完成实验 0–10 后按兴趣选择：
 
 | 方向 | 下一篇/下一组源码 |
 |---|---|

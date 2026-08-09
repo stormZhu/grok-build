@@ -10,5 +10,6 @@
 - [permissions-and-sandbox.md](./permissions-and-sandbox.md)：`AccessKind`、权限策略、YOLO/auto、plan gate 与 OS sandbox 的安全边界。
 - [pager-rendering.md](./pager-rendering.md)：ACP `SessionUpdate` 如何增量合并为 `RenderBlock`，再由 scrollback/layout 渲染到终端。
 - [mcp-lifecycle.md](./mcp-lifecycle.md)：MCP 配置、连接、工具发现、snapshot/reminder、调用、OAuth 和断线恢复。
+- [persistence-and-replay.md](./persistence-and-replay.md)：`updates.jsonl`、`chat_history.jsonl`、`ReplayBuffer` 的分层，以及恢复、重放、compaction、rewind 和 fork。
 
-后续适合放入本目录的主题包括采样循环、MCP dispatcher 和上下文压缩等。
+后续适合放入本目录的主题包括采样循环和 MCP dispatcher 等。
