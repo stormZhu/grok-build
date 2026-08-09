@@ -395,6 +395,16 @@ rg -n '\]\((\.\./)+[^)#]+\)' docs/deep-dives/persistence-and-replay.md
 
 ## 11. 一个可执行的源码实验
 
+先用缩小模型观察 ReplayBuffer 的纯顺序契约：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_replay_order
+```
+
+[`mini_replay_order.rs`](../rust-essentials/labs/async-demos/src/bin/mini_replay_order.rs) 通过 oneshot processed ack 建立确定顺序，并断言客户端只能依次看到：合并后的 `Hello`、非流式 tool event、completion 分支 flush 的尾部文本、`TurnCompleted`。它只模拟内存 ReplayBuffer，不写 `updates.jsonl`，因此不能证明 crash recovery 或 durability。
+
 不接真实模型也可以验证自己的理解：
 
 1. 找一个测试用的临时 session 目录，写入两轮 ACP `user_message_chunk` 和一条 `RewindMarker(target_prompt_index = 1)`；

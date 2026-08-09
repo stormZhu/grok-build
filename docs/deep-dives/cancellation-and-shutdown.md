@@ -233,7 +233,19 @@ Compaction 使用自己的 gate/token，并在流式摘要的等待点调用 `aw
 
 不要用固定长 `sleep` 证明取消成功。优先等待 oneshot ack、request count、`is_active`、child cancellation 或 test barrier；`timeout` 只作为失败上限。
 
-## 12. 源码阅读顺序
+## 12. 可运行的缩小模型
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_cancel_shutdown
+```
+
+[`mini_cancel_shutdown.rs`](../rust-essentials/labs/async-demos/src/bin/mini_cancel_shutdown.rs) 的第一条 Turn 在 timer 完成前收到 Cancel。Cancel ack 只在 Turn 内 RAII guard drop、completion 回到 Session 后发出；随后同一个 Session 成功运行第二条 Turn。最后 Shutdown 通知并 join 一个后台 workflow，再记录 flush 和发送 ack。
+
+缩小模型没有真实 sampler request-id、工具进程、subagent、persistence 或 replay 数据，但它固定了最重要的 owner 区别：Cancel 结束当前 Turn，Session 仍然服务；Shutdown 由 Session owner 收回后台资源后结束。
+
+## 13. 源码阅读顺序
 
 1. [`session/commands.rs`](../../crates/codegen/xai-grok-shell/src/session/commands.rs)：先理解 `CancelOptions`、`CancelTrigger`、`ShutdownKind`。
 2. [`session/acp_session_impl/run_loop.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs)：看 Cancel command 如何 flush、cancel、重启队列。

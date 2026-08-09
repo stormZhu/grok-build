@@ -40,6 +40,9 @@ async_demos=(
     watch_latest
     actor_request_reply
     mini_session_actor
+    mini_tool_pipeline
+    mini_replay_order
+    mini_cancel_shutdown
     spawn_local_rc
     timer_reset
     mutex_snapshot

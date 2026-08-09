@@ -146,11 +146,12 @@ cargo test -p xai-grok-shell <exact-filter> -- --nocapture
 - 取消测试同时检查 RAII cleanup 与不可回滚的外部副作用。
 - focused filter 运行后检查实际 test 数量，零测试不是通过证据。
 
-可在不改生产代码的前提下对 `mini_session_actor` 做三次故障注入：
+可在不改生产代码的前提下，对四个项目缩小模型做故障注入：
 
 1. 暂时去掉 completion 分支中的 `maybe_start_running_task`，观察第二条 reply 永远不来。
-2. 暂时不发送 `completion_tx`，观察 caller、running task 和队列分别停在哪里。
-3. 在仍有 running task 时发送 Shutdown，解释为何示例断言失败，以及生产代码需要怎样的取消/flush 协议。
+2. 在 `mini_tool_pipeline` 中去掉 Terminal，确认 Progress 不能冒充成功结果。
+3. 在 `mini_replay_order` 中把 `TurnCompleted` 放到 flush 前，确认顺序断言失败。
+4. 在 `mini_cancel_shutdown` 中让 Shutdown 不 await workflow，确认 cleanup 证据为何不足。
 
 实验结束后恢复能通过断言的版本，不保留偶然依赖调度或无限等待的代码。
 

@@ -166,6 +166,11 @@ cargo test -p xai-grok-shell run_session -- --nocapture
 ### 操作
 
 ```sh
+# 先验证内存 ReplayBuffer 的合并与终态顺序
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_replay_order
+
 rg -n "PersistenceMsg::(Chat|Update|FlushAndAck|ReplaceChatHistory)|AppendUpdateError" \
   crates/codegen/xai-grok-shell/src/session
 rg -n "filter_rewind_(lines|updates)|load_updates_for_replay|collect_prompts_from_events" \
@@ -255,6 +260,11 @@ Return findings ordered by severity.
 ### 操作
 
 ```sh
+# 先观察 JSON 解码、权限和 stream terminal invariant
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_tool_pipeline
+
 cargo test -p xai-tool-runtime
 cargo test -p xai-grok-tools registry
 rg -n "register_with_params|ToolStreamItem|ToolOutput|should_list|capabilities" \

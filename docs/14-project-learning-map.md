@@ -103,6 +103,17 @@ cargo run --locked \
 
 每次结束时闭卷回答：“权威状态在哪里？输入从哪里来？成功和失败分别回到哪里？什么证据能推翻我的解释？”答不出时缩小问题，不延长阅读文件列表。
 
+## 项目级可运行镜像
+
+| 先运行 | 再读生产源码 | 固定的不变量 |
+|---|---|---|
+| [`mini_session_actor`](./rust-essentials/labs/async-demos/src/bin/mini_session_actor.rs) | [`run-session`](./deep-dives/run-session.md) | mailbox、单一 running Turn、completion 回流 |
+| [`mini_tool_pipeline`](./rust-essentials/labs/async-demos/src/bin/mini_tool_pipeline.rs) | [`tool-call-pipeline`](./deep-dives/tool-call-pipeline.md) | JSON/强类型边界、权限、`Progress* -> Terminal` |
+| [`mini_replay_order`](./rust-essentials/labs/async-demos/src/bin/mini_replay_order.rs) | [`persistence-and-replay`](./deep-dives/persistence-and-replay.md) | chunk 合并、非流式事件和 completion 前 flush |
+| [`mini_cancel_shutdown`](./rust-essentials/labs/async-demos/src/bin/mini_cancel_shutdown.rs) | [`cancellation-and-shutdown`](./deep-dives/cancellation-and-shutdown.md) | Cancel 结束 Turn；Shutdown 收回 Session 资源 |
+
+这些程序只保留主干契约。每次运行后必须写出“生产代码多了哪些 owner、错误和持久化边界”，否则缩小模型会反过来遮蔽真实复杂度。
+
 ## 固定学习记录模板
 
 ```text

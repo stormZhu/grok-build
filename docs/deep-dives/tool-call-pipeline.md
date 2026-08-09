@@ -232,3 +232,26 @@ MCP 工具最终也会被注册到当前 `ToolBridge`，所以从 session 视角
 3. 读 `process_conversation_turn` 中 `execute_tool_calls` 的调用点与 `tool_calls.rs`，理解 **为什么 session 是策略所有者**。
 
 此时再读 MCP、后台任务、subagent 或 plan mode 的特殊分支，才不会把它们误当作所有工具的基础路径。
+
+## 10. 可运行的缩小模型
+
+先预测成功、拒绝和缺少 Terminal 三条路径，再运行：
+
+```sh
+cargo run --locked \
+  --manifest-path docs/rust-essentials/labs/async-demos/Cargo.toml \
+  --bin mini_tool_pipeline
+```
+
+[`mini_tool_pipeline.rs`](../rust-essentials/labs/async-demos/src/bin/mini_tool_pipeline.rs) 保留以下边界：
+
+```text
+模型 name + JSON args
+  -> prepare：名称解析 + serde 强类型解码
+  -> permission policy
+  -> Progress* + exactly one Terminal
+  -> UI summary + prompt_text
+  -> ChatState tool result
+```
+
+程序还构造了一条只有 Progress、随后 channel 关闭的错误流，并断言它不能被当作成功。示例没有实现真实 `ToolRegistryBuilder`、schema 生成、MCP、文件读取或 ACP 通知；它用于掌握契约顺序，生产证据仍应来自 runtime/registry/session 的 focused tests。
