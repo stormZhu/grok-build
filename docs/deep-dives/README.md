@@ -10,12 +10,14 @@
 - [permissions-and-sandbox.md](./permissions-and-sandbox.md)：`AccessKind`、权限策略、YOLO/auto、plan gate 与 OS sandbox 的安全边界。
 - [pager-rendering.md](./pager-rendering.md)：ACP `SessionUpdate` 如何增量合并为 `RenderBlock`，再由 scrollback/layout 渲染到终端。
 - [mcp-lifecycle.md](./mcp-lifecycle.md)：MCP 配置、连接、工具发现、snapshot/reminder、调用、OAuth 和断线恢复。
+- [mcp-dispatcher.md](./mcp-dispatcher.md)：聚焦 `McpClientEvent` 的 50ms tumbling window、client identity eviction、ACP server status、shutdown intent 与 stdio/HTTP recovery 分流。
 - [persistence-and-replay.md](./persistence-and-replay.md)：`updates.jsonl`、`chat_history.jsonl`、`ReplayBuffer` 的分层，以及恢复、重放、compaction、rewind 和 fork。
 - [sampling-lifecycle.md](./sampling-lifecycle.md)：从 `ConversationRequest`、Sampler Actor 和 SSE transform，追到流事件、重试、认证/compact recovery 与 tool-loop 接续。
 - [prompt-assembly.md](./prompt-assembly.md)：从 Agent Definition、ToolBridge 和 `PromptContext` 追到 system prompt、首轮 preamble、AGENTS/rules、skills 与动态 reminder。
 - [extensions-and-lifecycle.md](./extensions-and-lifecycle.md)：生命周期 contributor、hooks、plugins、skills 与 memory 如何在明确 owner 边界接入 turn，并保持权限、持久化和 loop 控制权不漂移。
 - [leader-control-plane.md](./leader-control-plane.md)：从 lock/socket 竞争、registration 和 ID namespace，追到多 client session route、版本偏斜、断线重连与进程清理。
 - [authentication-and-model-resolution.md](./authentication-and-model-resolution.md)：从配置和模型目录合并追到 `SamplerConfig`、BYOK/session token 隔离、OIDC/external refresh 与 turn 级 401 恢复。
+- [subagents-and-workflows.md](./subagents-and-workflows.md)：从 `task` 请求追到 child `SessionActor`、definition/role/persona、fork/resume、worktree 和 cancellation，再追到 Rhai Workflow 的 host service、journal、预算与恢复状态机。
 - [contributor-workflow.md](./contributor-workflow.md)：从症状、owner、mock fixture 和异步测试，建立可审查的开发/贡献证据链。
 
 后续适合放入本目录的主题包括 MCP dispatcher 等。

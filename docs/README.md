@@ -30,7 +30,7 @@
 | [11-guided-exercises.md](./11-guided-exercises.md) | Rust 与 Agent 结合的源码实验：从 Actor、Prompt、Tool 到真实 turn 测试 |
 | [12-glossary.md](./12-glossary.md) | Rust、Agent、Prompt、协议、安全与项目 owner 的统一术语索引 |
 | [13-contribution-projects.md](./13-contribution-projects.md) | 从低风险文档/纯函数到 Tool、Session、协议、认证和扩展的阶段化贡献项目 |
-| [源码精读](./deep-dives/README.md) | 针对具体函数、控制流和子系统的专题阅读；包含完整消息流、采样、认证与模型选择、工具调用、MCP、Leader、权限沙箱、扩展生命周期、Pager 渲染与持久化重放 |
+| [源码精读](./deep-dives/README.md) | 针对具体函数、控制流和子系统的专题阅读；包含完整消息流、采样、认证与模型选择、工具调用、MCP 生命周期/dispatcher、Leader、子代理/Workflow、权限沙箱、扩展生命周期、Pager 渲染与持久化重放 |
 
 ---
 
@@ -61,7 +61,9 @@
 17. **源码精读 / extensions-and-lifecycle** — 区分 hooks、plugins、skills、memory 与进程内 lifecycle 扩展的控制边界
 18. **源码精读 / leader-control-plane** — 理解多客户端如何共享 Agent Host，以及 IPC/版本/重连的边界
 19. **源码精读 / authentication-and-model-resolution** — 理解模型目录、凭据来源和 401 恢复为什么分层
-20. **源码精读 / contributor-workflow** — 学会按 owner 选测试、收集异步/协议证据并写出可审查改动
+20. **源码精读 / subagents-and-workflows** — 理解 definition、fork/resume、隔离 worktree、Rhai journal 和 Workflow 状态机
+21. **源码精读 / mcp-dispatcher** — 理解 50ms 事件合并、client identity、防 stale close、ACP status 和自动恢复
+22. **源码精读 / contributor-workflow** — 学会按 owner 选测试、收集异步/协议证据并写出可审查改动
 
 ---
 

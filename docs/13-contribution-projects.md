@@ -8,6 +8,7 @@
 - [12-glossary.md](./12-glossary.md)：遇到术语时确认 Rust、Agent、本项目三层含义；
 - [09-contributor-playbook.md](./09-contributor-playbook.md)：改动前的 owner 和测试原则；
 - [deep-dives/contributor-workflow.md](./deep-dives/contributor-workflow.md)：fixture、异步取消和协议证据。
+- [deep-dives/subagents-and-workflows.md](./deep-dives/subagents-and-workflows.md)：definition、fork/resume、隔离 worktree、Rhai journal 和 Workflow 状态机。
 
 ## 1. 统一交付标准
 
@@ -112,6 +113,7 @@ git diff --check
 - `crates/codegen/xai-grok-agent/src/prompt/context.rs`
 - `crates/codegen/xai-grok-agent/src/prompt/agents_md.rs`
 - [prompt-assembly.md](./deep-dives/prompt-assembly.md)
+- [subagents-and-workflows.md](./deep-dives/subagents-and-workflows.md)：definition、role/persona、fork/resume 和 child session 的完整边界
 
 ### 先回答
 
@@ -121,6 +123,8 @@ git diff --check
 | primary 和 subagent 都应看见吗？ | `PromptAudience` 分支和 fixture |
 | 工具名是文字说明还是 registry definition？ | `ToolBridge` 最终 definitions |
 | 规则是否会重复、越 scope 或泄漏敏感路径？ | `AGENTS` discovery/scope/dedup |
+
+如果改动针对子代理，不要只改 prompt 文案：先确认 definition discovery、runtime override precedence、capability intersection 和 child audience 是否仍一致。
 
 ### 验证
 
@@ -268,6 +272,7 @@ producer -> serde/wire -> transport -> old client/file
 | ACP | `xai-grok-shell/src/session/acp_types.rs`、`xai-acp-lib` |
 | Leader | `xai-grok-shell/src/leader/{protocol,client,server}.rs`、[leader-control-plane.md](./deep-dives/leader-control-plane.md) |
 | MCP | `xai-grok-mcp/src/`、[mcp-lifecycle.md](./deep-dives/mcp-lifecycle.md) |
+| MCP dispatcher/recovery | `xai-grok-shell/src/session/mcp_dispatcher.rs`、`mcp_restart.rs`、[mcp-dispatcher.md](./deep-dives/mcp-dispatcher.md) |
 | tool protocol | `crates/common/xai-tool-protocol/src/` |
 
 ### 最小验证

@@ -90,6 +90,7 @@ cargo tree -p xai-grok-shell --depth 1
 |---|---|
 | Agent definition 没被发现 | `xai-grok-agent/src/discovery.rs` → `src/config.rs` → `src/builder.rs` |
 | 子代理继承了错误上下文 | `xai-grok-shell/.../spawn.rs` → `xai-grok-subagent-resolution` → `xai-grok-agent/src/prompt/` |
+| 子代理或 Workflow 状态不一致 | `xai-grok-shell/src/agent/subagent/` → `xai-grok-subagent-resolution` → `xai-workflow` → `session/workflow/{manager,tracker,store}.rs`；见 [`subagents-and-workflows`](./deep-dives/subagents-and-workflows.md) |
 | Skill 热加载或重复注入 | shell `run_loop.rs` → `xai-grok-agent/src/prompt/skills.rs` → pager user guide skills |
 | hook 没执行/被拒绝 | `xai-grok-hooks` → shell `session/acp_session_impl/hooks_plugins.rs` → `xai-agent-lifecycle` |
 | `/goal` 或 workflow 反复续跑 | shell `session/acp_session_impl/goal*.rs` → `xai-workflow` → tools goal/workflow implementations |
@@ -265,6 +266,7 @@ third-party 代码有独立许可证和变更通知要求。不要为了修一�
 | 模型流式响应/重试 | `xai-grok-sampler/src/stream/` | shell `sampling/` | `cargo test -p xai-grok-sampler` |
 | IDE/ACP 集成 | `xai-acp-lib/src/gateway.rs` | shell `mvp_agent/` + `session/acp_*` | ACP fixture / shell test |
 | MCP 工具发现/断线 | `xai-grok-mcp` | shell `session/.../mcp.rs` | MCP integration test |
+| MCP 状态事件/恢复竞态 | shell `session/mcp_dispatcher.rs` + `mcp_restart.rs` | `xai-grok-mcp/src/liveness.rs` | paused-clock dispatcher/e2e fixture；见 [`mcp-dispatcher`](./deep-dives/mcp-dispatcher.md) |
 | 文件编辑权限 | workspace `permission/` | tools edit implementation + sandbox | temp-dir permission test；见 [`permissions-and-sandbox`](./deep-dives/permissions-and-sandbox.md) |
 | worktree/fork | `xai-fast-worktree` | shell `spawn.rs` / workspace worktree | fork/worktree e2e |
 | TUI 布局或滚动 | pager `src/views/` / `scrollback/` | pager PTY harness | render/snapshot/PTY；见 [`pager-rendering`](./deep-dives/pager-rendering.md) |

@@ -376,6 +376,7 @@ rg -n "should_prune|soft_trim|hard_clear|context_window|MAX_REQUEST_BYTES" \
 - `crates/codegen/xai-grok-shell/tests/`
 - `crates/codegen/xai-grok-pager-pty-harness/`
 - `crates/codegen/xai-grok-sampler/tests/`
+- `crates/codegen/xai-workflow/src/validate.rs`：不接真实 child 的 Workflow dry-run host
 
 ### 操作
 
@@ -445,8 +446,9 @@ Owner：哪个 actor/crate 拥有权威状态？
 | Rust async/actor | `rust-essentials/08`–`17`、shell `run_loop.rs`、[`sampling-lifecycle.md`](./deep-dives/sampling-lifecycle.md) |
 | Agent 行为和 prompt | `05-prompt-engineering.md`、[`prompt-assembly.md`](./deep-dives/prompt-assembly.md)、`xai-grok-agent/src/prompt/` |
 | 工具和安全 | `deep-dives/tool-call-pipeline.md`、workspace permission、sandbox |
+| 子代理和 Workflow | [`subagents-and-workflows.md`](./deep-dives/subagents-and-workflows.md)、`xai-grok-subagent-resolution`、`xai-workflow`、shell `agent/subagent/` 与 `session/workflow/` |
 | 长会话和 memory | `04-context-management.md`、compaction、memory crate |
-| ACP/MCP 集成 | `06-interfaces.md`、`xai-acp-lib`、`xai-grok-mcp`、[`mcp-lifecycle.md`](./deep-dives/mcp-lifecycle.md) |
+| ACP/MCP 集成 | `06-interfaces.md`、`xai-acp-lib`、`xai-grok-mcp`、[`mcp-lifecycle.md`](./deep-dives/mcp-lifecycle.md)、[`mcp-dispatcher.md`](./deep-dives/mcp-dispatcher.md) |
 | TUI/终端 | `xai-grok-pager`、markdown、PTY harness、ratatui crates |
 | 代码索引和 workspace | `xai-codebase-graph`、fsnotify、fast-worktree、hunk tracker |
 | 开发与贡献实践 | [`contributor-workflow.md`](./deep-dives/contributor-workflow.md)、`xai-grok-test-support`、`xai-grok-shell/tests/` |
