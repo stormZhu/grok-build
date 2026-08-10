@@ -162,6 +162,7 @@ owner：谁拥有最终状态
 # 不知道从哪个实验开始时，先按主题选路径
 docs/rust-essentials/labs/study.sh tracks
 docs/rust-essentials/labs/study.sh list turn
+docs/rust-essentials/labs/study.sh checklist turn
 docs/rust-essentials/labs/study.sh path turn
 
 # 从 Session 的三个核心符号开始

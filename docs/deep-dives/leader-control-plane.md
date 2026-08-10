@@ -284,3 +284,182 @@ cargo run --locked \
 5. 假设给 Leader 增加一个 `GetDiagnostics` control command，写出它需要更新的 protocol、server、client 和测试文件。
 
 能够回答这些问题后，你就可以区分“模型/Agent 问题”“Session 状态问题”和“本机 IPC 控制面问题”，而不会把多客户端故障错误修到 Pager 或 Sampler 中。
+
+## 11. Lock、socket 与 PID：三种证据的强弱
+
+Leader discovery 同时出现 lock file、socket path 和 PID，很容易把它们都当成“Leader 存活证明”。实际上三者回答不同问题：
+
+| 证据 | 能证明什么 | 不能单独证明什么 |
+|---|---|---|
+| socket/pipe 名存在 | 某个 listener 曾经或正在占用该地址 | 进程仍活着、Agent ready、版本合适 |
+| lock file 内容中的 PID | 上一次持有者写入的诊断 identity | 当前 OS lock holder 就是该 PID |
+| OS exclusive flock 被占用 | 某个进程仍持有这个 inode 的锁 | 文件中 PID 正确、socket 可连接 |
+| register/control 响应 | 当前连接对端能执行 Leader 协议 | session 已 attach、某个 turn 已恢复 |
+
+因此 zombie eviction 需要组合证据：连接持续失败、flock 仍被占用、文件 PID 与真实 live lock holder 匹配，并且同一 PID 已超过 deadline。只凭 stale PID file 发送 signal 会遇到 PID reuse，可能终止完全无关的进程。
+
+### 11.1 为什么等待 lock 时每轮重新 open
+
+`LeaderLock::acquire_reopen_timeout` 每 200ms 重新打开 lock path，再尝试 `try_lock_exclusive`。这不是低效实现，而是针对 Unix inode 语义：旧流程可能 unlink lock file；继续轮询原先打开的 fd，只会盯着已从目录移除的旧 inode。另一个进程已经在同一路径创建并锁住新 inode，等待者却永远看不到。
+
+```text
+waiter fd -> inode A (已 unlink)
+path      -> inode B (新 Leader 正在使用)
+
+复用 fd:  只观察 A，产生错误 leader 判断
+重新 open: 下一轮解析 path，观察 B
+```
+
+正确清理顺序也依赖 `was_leader`：获得锁后异常退出应清理自己负责的文件；显式 `release()` 是把 spawn 责任交给 child，必须先清 `was_leader`，即使后续 unlock 报错，Drop 也不能删除新 child 将使用的 socket。
+
+### 11.2 path override 必须成对覆盖
+
+`GROK_LEADER_SOCKET` / `--leader-socket` 覆盖 socket 时，lock 路径必须由同一 socket 的 sibling `.lock` 派生，并同时被 client 与 spawned Leader 继承。若只覆盖 socket、不覆盖 lock：
+
+- 两组 client 可能竞争同一个全局 lock，却连接不同 socket；
+- 或两个 Leader 绑定同一个 socket，却认为自己拥有不同 lock；
+- 测试分支的 Leader 可能与已安装稳定版互相驱逐。
+
+默认路径按 relay WS URL 做短 hash；生产 URL 不加 suffix。hash 是实例分区 key，不是安全认证，也不应包含在协议授权判断中。
+
+## 12. `connect_or_spawn` 是 adopt-or-create 循环
+
+源码并不是一次 `connect` 加一次 `spawn`，而是带重新验证的循环：
+
+```text
+probe listener
+  -> 可连且版本可采用: return connection
+  -> 不可连/需替换: try flock
+       -> 获得 flock
+            -> 再次探测 sibling 是否已经建立可采用 Leader
+            -> 必要时驱逐严格旧版本
+            -> release handoff lock
+            -> spawn subprocess
+            -> bounded wait for connect + register
+       -> 未获得 flock
+            -> 等对方完成 startup
+            -> connect-level failure 持续时才进入 zombie decision
+            -> 回到 try flock
+```
+
+lock 下的第二次连接检查防止 eviction/spawn race：本进程等待时，另一个更快的 client 可能已经完成替换。此时继续 spawn 会重新制造 split-brain，正确行为是释放临时责任并 adopt sibling。
+
+### 12.1 self-spawn 与 zombie eviction 都有预算
+
+spawned child 未在 deadline 内可连接时不能无限拉起进程；同一 zombie PID 的 TERM/KILL 尝试也有上限。PID 改变后 eviction counter 与 timer 都应重新计数，因为它代表新的 holder。测试时间状态机时应注入 `Instant` 或调用纯 decision function，不能用几秒 sleep 模糊覆盖 race。
+
+### 12.2 sandbox 中拒绝拉起 Leader
+
+`connect_or_spawn` 在检测到请求的 confinement profile 时返回 `SandboxConfinement`。Leader 是长期、跨客户端且可能超出当前 sandbox 生命周期的进程；在受限工具进程中偷偷 spawn 它会扩大权限与持久化范围。调用者应回到直连/已授权宿主路径，而不是为了连接成功绕过 confinement。
+
+## 13. Leader wire framing：ACP JSON 外还有一层协议
+
+Leader transport 不是 newline-delimited JSON。每个 `ClientMessage` / `ServerMessage` 使用：
+
+```text
+4-byte big-endian u32 body length
+JSON body bytes
+```
+
+`read_frame` 先完整读取 4 字节，再检查 64 MiB 上限，然后才分配 body buffer。`write_frame` 同样在写入前检查上限，并依次 `write_all(length)`、`write_all(body)`、`flush()`。
+
+这形成几条安全不变量：
+
+1. partial header 必须受 connect/registration timeout 约束，否则恶意或损坏 peer 可永久占住 handler；
+2. oversized length 必须在 allocation 之前拒绝，避免本机 memory DoS；
+3. valid frame + invalid JSON 与 EOF 是不同错误，便于区分版本/数据损坏和普通断线；
+4. 多 frame 连续读取必须严格保持边界，不能把 ACP payload 中的换行当 framing；
+5. `ServerMessage::Acp { payload }` 的 payload 自身仍是 JSON 字符串，不能直接把它的 object shape 混进 control enum。
+
+### 13.1 连接超时要覆盖“读了一半”
+
+只给 `UnixStream::connect` 加 timeout 不够。对端可能 accept 后只写两个 length bytes，client 会卡在 registration response。`LeaderClient::connect` 的 timeout 必须包住 register/readiness handshake，测试也应覆盖：无响应、partial header、完整 header + partial body、garbage JSON、`Registered ready=false` 后永不 `LeaderReady`。
+
+## 14. Unix socket 与 Windows named pipe 的共同抽象
+
+Unix 上 `LeaderStream`/`LeaderListener` 是 Tokio Unix 类型别名；Windows 上是 named pipe wrapper。调用方依赖共同的 async read/write/accept API，但 readiness 语义不同：
+
+- Unix 可以检查 socket path 是否存在；
+- Windows pipe 不出现在文件系统，必须用非连接式 `WaitNamedPipeW` probe；
+- probe 不能真实 `open`，否则会消耗 server 的一次 accept，制造 phantom client；
+- Windows listener 每次连接后需要预创建下一 pipe instance；失败后必须重新 arm，不能把 accept slot 永久留空。
+
+跨平台测试不能只断言 path.exists。抽象的契约应是“listener 可被探测/连接”，文件存在只是 Unix 实现细节。
+
+## 15. Control plane 与 ACP data plane 的隔离
+
+`ClientMessage` 明确区分 `Register`、`Acp`、`Control`、`Ping` 和 `Disconnect`。Control 使用独立 `request_id`，返回 `ControlResult`；它不进入共享 Agent 的 JSON-RPC namespace。
+
+```text
+Leader control request_id -> server control handler -> ControlPayload/ControlError
+ACP JSON-RPC id            -> namespace -> Agent -> restored response
+```
+
+如果把 CPU profile、workspace exposure 或 diagnostics 实现为假 ACP method，会污染 session history/routing，并要求 Agent 在尚未 ready 时处理本应由 Leader 回答的问题。反过来，把 session prompt 当 control command 会绕开 session permission、persistence 和 replay。
+
+`LeaderCapabilities` 是 feature negotiation，而不是只看 protocol version：`control_v1`、`runtime_cpu_profile`、`workspace_exposure`、`relaunch_v1` 可独立缺失。新 client 面对旧 Leader 时读取 serde default `false` 并降级；不能看到 `LEADER_PROTOCOL_VERSION == 1` 就假设所有后加 capability 都存在。
+
+## 16. 受控 relaunch 的事务边界
+
+`RelaunchForUpdate { to_version }` 是有 ack 的 disruptive control command：
+
+```mermaid
+sequenceDiagram
+    participant C as Updated client
+    participant L as Old Leader
+    participant S as Sessions
+    C->>L: RelaunchForUpdate(to_version)
+    alt old leader supports relaunch_v1 and is older
+        L-->>C: Relaunching(from,to,grace_ms)
+        L->>L: stop admitting new turns
+        L->>S: bounded drain + flush
+        L-->>C: ShuttingDown(AutoUpdate)
+        L-->>C: Shutdown
+        Note over C,L: old process releases lock/socket
+        C->>L: connect_or_spawn new managed binary
+        C->>L: session/load replay
+    else unsupported/already current/in progress
+        L-->>C: RelaunchDeclined(reason)
+    end
+```
+
+`to_version` 是防重复/降级决策输入，不是执行任意 binary 的路径。managed install 应从原子更新后的稳定 symlink 启动新 Leader；若复用旧进程的 `current_exe()`，更新成功也只会再次拉起旧 binary。
+
+`ShuttingDown.delay_ms` 当前为 0，client 只能把它当“立即 shutdown 的预告”，不能依赖真实 grace。真正的 grace 在 Leader 内部 drain/flush 路径；protocol 字段是未来兼容面。
+
+### 16.1 shutdown reason 影响 reconnect policy
+
+`AutoUpdate` 表示应立即走 `connect_or_spawn` 并 restore；`Manual` 可能是 SIGTERM 或外部取消，client 应避免形成无休止 spawn storm；`IdleTimeout` 当前只是保留 enum，不能写测试假设 runtime 会产生它。新增 reason 时要同时更新 serde round-trip、UI state、bridge reconnect 和 server broadcast。
+
+## 17. 背压、慢客户端与内存边界
+
+Leader 对每个 client 持有 outbound channel。一个慢 UI 不应让 server 主循环在 socket write 上 await，否则它会阻塞所有其他 client 的 response。主循环使用 try-send 将消息交给 per-client writer，关闭或容量问题必须记录并按消息类别处理。
+
+需分别定义：
+
+- response 发送失败：原请求已完成但请求方不可达，不能广播给别人；
+- live notification 发送失败：其他 subscriber 仍应继续收到；
+- load-live buffer：每个 `(client, session)` 有 4096 项上限，超限后退化为直接转发并告警；
+- pending interaction：不能因普通 live buffer 清理而丢失，直到 resolved 或 session owner 结束；
+- control result：必须只回 control request 的连接。
+
+容量上限不是完整流控。压力测试还要验证断开慢 client 后其 sender、load buffer、pending request route 和 subscriber membership 都被回收。
+
+## 18. 故障矩阵与进阶练习
+
+| 症状 | 先区分的状态 | 最短证据 |
+|---|---|---|
+| socket 存在但一直连不上 | stale path / live holder / half-started Leader | listener probe、真实 flock holder、registration timeout |
+| 更新后仍运行旧版本 | relaunch capability / spawn binary resolution | `LeaderInfo` version、managed symlink、replacement event |
+| 一个 client 卡住拖慢全部客户端 | server loop 是否 await socket write | per-client writer、channel/backpressure fixture |
+| Windows 偶发 phantom session | readiness probe 是否真实 open pipe | named-pipe probe/accept count |
+| control command 无响应但 ACP 正常 | control request ID route | `ControlResult.request_id`、capability flag |
+| 退出后会话少最后一段 | LocalSet 先 drop 或 flush 超时 | shutdown reason timeline、session flush completion |
+
+进阶练习：
+
+1. 画出 waiter 打开 inode A、A 被 unlink、winner 创建 inode B 的时序，解释 reopen polling 如何收敛。
+2. 为 64 MiB frame 写边界表：0、上限、上限+1、partial header、partial body 分别应得到什么结果。
+3. 给 `GetDiagnostics` 设计 capability flag，而不是只提升 protocol version；写出旧 client 与旧 Leader 的四格兼容矩阵。
+4. 模拟三个 client，其中一个永不读 socket；证明另两个仍能收到 response，并列出慢 client 断开后必须清除的 map entry。
+5. 从 `Relaunching` ack 追到 `AutoUpdate` shutdown，再到新进程 `session/load`，标出可重试操作和不可盲目重放的一次性操作。

@@ -25,5 +25,7 @@
 - [subagents-and-workflows.md](./subagents-and-workflows.md)：从 `task` 请求追到 child `SessionActor`、definition/role/persona、fork/resume、worktree 和 cancellation，再追到 Rhai Workflow 的 host service、journal、预算与恢复状态机；包含 child session scope 与 journal replay/预算实验。
 - [contributor-workflow.md](./contributor-workflow.md)：从症状、owner、mock fixture 和异步测试，建立可审查的开发/贡献证据链。
 - [observability-and-trace-timeline.md](./observability-and-trace-timeline.md)：从 tracing span、ACP/HTTP `traceparent`、unified JSONL、debug firehose 和 OTLP 脱敏，反向还原一次用户消息的完整时间线；包含 task context/关联键/默认拒绝实验。
+- [context-compaction-lifecycle.md](./context-compaction-lifecycle.md)：从 request pruning、自动阈值和 two-pass prefire，追到 full-replace 输入降级、历史重建、token reseed、suppression 与 checkpoint 恢复；包含有损编码、cache coherence 和 crash consistency 理论。
+- [terminal-command-and-process-lifecycle.md](./terminal-command-and-process-lifecycle.md)：从 Bash tool 和 `TerminalBackend` 追到本地 Actor/ACP terminal、输出流、前后台切换、进程树 kill/reap、task tombstone 与恢复 manifest；包含结构化并发和资源所有权分析。
 
-后续适合放入本目录的主题包括 MCP dispatcher 等。
+后续适合放入本目录的主题包括 memory 检索与写回、文件编辑/hunk 追踪等。

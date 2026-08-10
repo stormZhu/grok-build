@@ -255,3 +255,300 @@ cargo run --locked \
 6. [`xai-tool-runtime/src/context.rs`](../../crates/common/xai-tool-runtime/src/context.rs)、[`xai-grok-tools/src/registry/types.rs`](../../crates/codegen/xai-grok-tools/src/registry/types.rs)：看取消 token 如何进入工具上下文。
 7. [`xai-grok-tools/src/bridge.rs`](../../crates/codegen/xai-grok-tools/src/bridge.rs) 与 [`computer/local/terminal.rs`](../../crates/codegen/xai-grok-tools/src/computer/local/terminal.rs)：确认进程级 kill 和 actor shutdown。
 8. [`session/acp_session_tests/cancel_running_task_tests.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_tests/cancel_running_task_tests.rs)：用测试名称反向读取竞态和不变量。
+
+---
+
+## 14. 取消的线性化点在哪里
+
+并发系统中的“取消发生了”必须对应一个可观察的线性化点。对 Session 来说，至少有四个候选时刻：
+
+```text
+T1 client 发出 Cancel
+T2 actor 从 command channel dequeue Cancel
+T3 running AgentTask 被 take + abort
+T4 PromptResponse / TurnCompleted 发布
+```
+
+客户端意图从 T1 开始，但 actor-owned 状态只能从 T2 串行改变；T3 之后旧 turn future 不再合法地产生新业务结果；T4 才是外部观察者可以依赖的完成证据。
+
+因此 cancel 与自然 completion 同时到达时，不能让两个路径都独立“完成一次 turn”。Actor 的 `running_task`、queue front 和 prompt ID 是仲裁状态：谁先在 actor 顺序中取得并清理它，谁拥有 terminalization；另一条路径必须发现状态已被消费并变成 no-op/幂等清理。
+
+### 14.1 为什么先 pin prompt ID
+
+`cancel_running_task` 在跨多个 `await` 之前固定当前 prompt identity。之后终端 kill、子代理 sweep 等操作可能给 completion task 运行机会；如果最后再读取“当前 prompt”，它可能已经指向下一条排队输入。
+
+```text
+pin P1
+  -> await kill foreground
+  -> completion/queue state may move
+  -> terminalize exactly P1
+```
+
+这是 async 状态机的一般规则：跨 `await` 使用的身份必须在进入操作时捕获，不能在收尾时从可变全局状态重新猜。
+
+### 14.2 `running_task.take()` 是所有权转移
+
+从 state 中 `take()` 出 `AgentTask` 后，cancel path 成为该 abort handle 的唯一 owner。后续再次取消会看到 `None`，不会对同一 task 重复 terminalize。`AgentTask::abort()` 本身也是幂等检查：已 finished 的 handle 不再 abort。
+
+但只有 handle 所有权是线性的，外围资源仍需独立回收。因此代码先处理 terminal/subagent，再 take/abort future，而不是期望 `AbortHandle` 自动知道所有外部资源。
+
+## 15. Wake barrier 是取消后的 admission control
+
+stop gesture 最大的竞态不是“旧模型还多吐一个 token”，而是后台 task completion 在 cancel 后立刻排入一个 synthetic prompt，又把模型唤醒。
+
+`WakeBarrier::{Armed, Clear}` 把 `cancel_running_task` 的结果显式交给调用方：
+
+```text
+Esc / Ctrl+C / unknown client stop
+  -> task_wake_suppressed = true
+  -> notifications_suppressed = true
+  -> WakeBarrier::Armed
+
+SendNow / rewind / shutdown cancel
+  -> suppression cleared or保持 clear
+  -> WakeBarrier::Clear
+```
+
+`#[must_use]` 防止调用方无意丢弃这个结果。因为 barrier 不只是 cancel 函数内部状态：run loop 在 cancel 返回后是否 drain pending notifications，必须由同一个 outcome 决定。
+
+### 15.1 Monitor buffer sweep 关闭一个窄竞态
+
+AgentTask abort 后，`TurnActiveGuard::drop` 还可能尚未执行，`is_turn_active` 短暂保持 true。此时到达的 `InjectNotification` 可能仍进入 `MonitorEventBuffer`，而不是 `pending_notifications`。
+
+cancel path 在持有 session state 时显式 `sweep_monitor_buffer_into_pending`：
+
+- stop gesture：事件留下，下一次真实用户 turn 再消费；
+- non-stop cancel：允许随正常 drain 继续；
+- hard teardown：后台 producer 已被杀，相关 pending notification 一并清理。
+
+如果只切换 suppression flag 而不 sweep，竞态窗口里的通知会被困在旧 buffer。
+
+## 16. Rewind 是回滚 admission，不是普通 cancel
+
+`rewind_if_no_output` 只在 state 标记 turn 可 rewind、queue front 是真实 user row 时生效。它把尚未产生可观察输出的当前输入取回，而不是给它写一个 cancelled terminal：
+
+```text
+user prompt admitted
+  -> turn 尚无输出
+  -> rewind request
+  -> abort task
+  -> recover original queued input
+  -> replacement path 重新处理
+```
+
+这解释了几个条件：
+
+- 不能 rewind workflow/task synthetic front；
+- 已有模型输出时回滚会破坏历史，必须走正常 cancel；
+- rewind 不计作用户 cancellation metric；
+- rewind 不应 arm stop barrier，因为 turn 在被替换而不是要求系统静止；
+- 被取回 front 的 `respond_to` 不能同时收到 `Cancelled`。
+
+这是事务语义中的“尚未 commit 可回滚”；一旦输出进入 replay/history，系统只能追加一个 cancellation terminal，不能假装 turn 从未发生。
+
+## 17. Terminal timeout、后台化与 kill 是三种状态转换
+
+[`computer/local/terminal.rs`](../../crates/codegen/xai-grok-tools/src/computer/local/terminal.rs) 同时处理 foreground block budget、用户请求 timeout、后台任务最大寿命和显式 kill。它们不能压成一个 `TimedOut`：
+
+| 触发 | auto-backgroundable | 动作 | 进程是否继续 |
+|---|---:|---|---:|
+| foreground block budget | 是 | transition to background，通知 waiter | 是 |
+| request timeout | 是 | transition to background | 是 |
+| request timeout | 否 | TERM/标记 timeout，结束 foreground result | 否/进入回收 |
+| Ctrl+G | 适用的 foreground | transition to background | 是 |
+| explicit `kill_task` | 无关 | TERM，宽限后 KILL，等待 reap | 否 |
+| interactive session cancel | 只选 foreground | KILL process group，bounded wait | 否 |
+| actor/root shutdown | 全部 | `shutdown_all` KILL | 否 |
+
+### 17.1 后台化不是失败
+
+默认 foreground block budget 只限制“这个 turn 等多久”，不限制任务总运行时间。后台化会：
+
+- 将 key 从内部 foreground ID 迁移到 tool-call ID；
+- 标记 `BackgroundStatus::Backgrounded { reason }`；
+- 把 runtime timeout 改为 `BACKGROUND_MAX_RUNTIME`；
+- 向当前 waiter 返回 task snapshot/result，让模型可稍后轮询；
+- 保留真实 child 和输出收集。
+
+如果把它映射成 timeout error，模型可能重复启动同一命令；如果误杀 child，`get_task_output` 又永远拿不到结果。
+
+### 17.2 显式 kill 的 TERM→KILL→reap
+
+`graceful_kill_and_wait()` 用两阶段进程组终止：
+
+```text
+SIGTERM(group)
+  -> wait up to SIGTERM_GRACE (1s)
+  -> still alive: SIGKILL(group)
+  -> wait up to 5s for reap
+  -> bounded drain remaining stdout/stderr
+```
+
+进程组而不是只杀 leader，防止 shell 已启动的子进程继续运行。SIGKILL 后仍要 `wait()`：signal 送达不等于内核资源已回收，快速启动下一条大内存命令时尤其重要。
+
+5 秒后仍未退出可能是 D-state 等不可中断内核 I/O；代码记录 warning 并让 poll loop 后续接手，避免 terminal actor 永久阻塞。
+
+### 17.3 interactive cancel 为什么直接 KILL
+
+Session cancel 追求快速停止当前 turn，`kill_foreground_commands()` 对所有非 backgrounded process 直接发 KILL，并 bounded wait。它还会：
+
+- abort state-dump reader，避免继承 pipe 的孙进程让 blocking read 永久挂住；
+- 标记 exit signal 为 `cancelled`；
+- flush/truncate output file；
+- resolve completion waiters；
+- 从 live process map 移除条目。
+
+所以完成证据不是“调用了 kill method”，而是 child wait、waiter resolution 和 process-map removal 的组合。
+
+## 18. 输出 drain 也必须有预算
+
+进程已经退出，stdout/stderr pipe 仍可能有尾数据；反过来，逃逸或后台化的 descendant 也可能继续持有 pipe write end，使 EOF 永远不到达。
+
+`drain_remaining_output()` 用 `DRAIN_TIMEOUT` 限制尾部读取，然后主动 drop pipe handles。收集的数据追加到内存 buffer 和可选输出文件，再执行 truncate policy。
+
+这在关闭协议中提供一个明确取舍：
+
+```text
+最多等待有限时间保存尾输出
+而不是为了理论上的完整 EOF 永久卡住 actor shutdown
+```
+
+测试要覆盖“child 已退出但 pipe 有尾数据”和“descendant 持有 pipe”两种相反案例。只用立即 EOF 的短命令无法验证 drain budget。
+
+## 19. `ShutdownKind` 区分 quiesce 与强制终止 turn
+
+[`ShutdownKind`](../../crates/codegen/xai-grok-shell/src/session/commands.rs) 有：
+
+```rust
+pub enum ShutdownKind {
+    Graceful,
+    CancelRunningTurn,
+}
+```
+
+`SessionCommand::Shutdown` 共同先做 workflow shutdown、replay flush 和 side-task abort。只有 `CancelRunningTurn` 会调用完整 `cancel_running_task`，并设置 `cancel_subagents=true`、`kill_background_tasks=true`、trigger=`Shutdown`。
+
+`Graceful` 用于宿主已保证 running work 不需在此处被破坏的 quiesce/卸载路径；它不是“慢一点的 CancelRunningTurn”。调用者必须根据是否仍可能有 active turn 选择类型，不能为了退出更快总发 Graceful。
+
+### 19.1 shutdown 不是 stop gesture
+
+Shutdown trigger 不属于 `is_stop_gesture()`，不会 arm 一个等待下一次用户输入解除的 wake barrier，因为 session 已准备退出，不会再开始普通 turn。这里靠 hard teardown 清队列和资源，而不是靠 admission suppression 暂停。
+
+### 19.2 SessionEnd 的完成证据在 owner 手里
+
+Pager 的 [`AgentShutdownGuard`](../../crates/codegen/xai-grok-pager/src/acp/spawn.rs) 在 Drop 中：
+
+1. cancel agent root token；
+2. 把 worker thread 的阻塞 `join` 放到 helper thread；
+3. 在 `SESSION_FLUSH_GRACE + slack` 预算内等待；
+4. 区分 joined、worker error、panic、timeout 和 helper lost。
+
+它不能在 Drop 中 `.await`，所以用同步 channel 等 helper 的 join 结果。超时后只记录“SessionEnd 可能不完整”，不能谎称 shutdown 成功。
+
+这个 guard 必须覆盖所有 `spawn_grok_shell` 调用点；否则 `?` 提前返回或 panic unwind 会跳过 SessionEnd hooks、telemetry、upload drain 和 memory flush。
+
+## 20. 资源关闭应遵循依赖图的逆拓扑
+
+创建顺序通常是：
+
+```text
+root runtime
+  -> SessionActor
+      -> turn task
+          -> sampler request
+          -> tool call
+              -> terminal/LSP/subagent child
+```
+
+关闭时应从叶子向 owner 回收：
+
+```text
+停止 admission
+  -> cancel leaf producers
+  -> kill/reap OS children
+  -> resolve pending waiters
+  -> flush replay/persistence/telemetry
+  -> close actor channels
+  -> join actor/worker owner
+```
+
+如果先 drop persistence receiver，再让 turn task写 terminal event，最后的记录会丢失；如果先等待 registry lock，再杀正在持锁的 Bash，可能死锁；如果先 join owner thread、却没有触发 root token，join 会永远等待。
+
+### 20.1 LSP 是 graceful-with-backstop 的例子
+
+[`implementations/lsp/client.rs`](../../crates/codegen/xai-grok-tools/src/implementations/lsp/client.rs) 的正常 shutdown：
+
+```text
+didClose all documents
+  -> request shutdown
+  -> send exit
+  -> bounded await main loop
+  -> abort tasks + kill/reap process group
+```
+
+若 transport 已死，直接跳过必败 handshake；若 timeout，abort main loop；`Drop` 共享幂等 `reap_children()` 作为 backstop。graceful path 改善协议完整性，Drop path 保证资源最终不泄漏，两者缺一不可。
+
+## 21. 取消代码的常见错误模式
+
+| 错误写法 | 为什么错误 | 正确证据 |
+|---|---|---|
+| `handle.abort(); return Ok(())` | child、sampler、waiter 可能仍活着 | leaf cancel + child reap + terminal response |
+| 只检查 `is_turn_active=false` | 观测 flag 不是通知机制 | token/channel/owned handle |
+| cancel 后立即 drain 所有 task wake | stop gesture 会被后台完成自动唤醒 | `WakeBarrier::Armed` |
+| channel EOF 当正常成功 | producer 可能 panic 或提前 drop | 明确 terminal/ack variant |
+| timeout 一律 kill | auto-backgroundable command 应继续 | background status + task ID |
+| 只杀 shell leader PID | descendants 继续运行/持有 pipe | process-group signal |
+| SIGKILL 后不 wait | zombie/RSS 尚未回收 | bounded child reap |
+| fixed sleep 后断言已取消 | CI 时序不确定，且无因果证据 | oneshot、barrier、process exit |
+| Drop 中启动无 owner async cleanup | runtime 可能先消失 | owner 保存 handle 或同步 backstop |
+| cancel/completion 都写 TurnCompleted | 重复终态和 usage | actor state take/linearization |
+
+## 22. 更完整的确定性测试设计
+
+### 22.1 Session 竞态
+
+- 在 completion 入 actor channel 前后分别注入 cancel，断言只有一个 terminal；
+- cancel 跨 `await` 时排入下一 prompt，证明 pinned prompt ID 不误伤新 turn；
+- `running_task=None` 但 queue front 仍是当前 prompt 的窗口，response 不悬挂；
+- stop gesture sweep monitor buffer 但不 drain；
+- SendNow 清 barrier 并立即让 replacement front 运行；
+- hard teardown resolve 整个队列，不留下 oneshot receiver。
+
+### 22.2 Sampler 与 retry
+
+- future Drop 发送正确 request ID 的 Cancel；
+- active map 移除后重复 Cancel 为 no-op；
+- stream-ready 与 token-ready 同时发生时 biased select 选择 cancel；
+- retry backoff 使用 cancel-aware sleep；
+- cancellation 不计入可重试错误，也不发第二次 completion。
+
+### 22.3 进程生命周期
+
+- foreground budget 后 child 仍活且可按 tool-call ID 查询；
+- non-backgroundable timeout 结束 child；
+- explicit kill 先 TERM，宽限后才 KILL；
+- child 派生孙进程时 process-group kill 全部终止；
+- KILL 后 waiter 被 resolve、map 条目删除；
+- 尾输出在退出竞态中仍保存；
+- descendant 持 pipe 时 drain 在 2 秒预算后返回；
+- owner-scoped kill 不影响 sibling session 的进程。
+
+### 22.4 Shutdown
+
+- `Graceful` 不意外取消允许存活的 running work；
+- `CancelRunningTurn` 清 foreground/background/subagent 与 queue；
+- shutdown 前 replay buffer 尾 chunk 已 emit；
+- LSP 正常 handshake、timeout fallback 和 already-dead transport；
+- `AgentShutdownGuard` 对正常返回、错误、panic、timeout 分别分类；
+- 所有 pending RPC 都得到 response 或明确 channel-close error。
+
+### 22.5 阅读练习
+
+1. 从 `SessionCommand::Cancel` 追到 `emit_turn_completed`，标出每个跨 `await` 前固定的 identity。
+2. 构造 cancel 与 completion 同时 ready 的时序，证明 queue front 和 `running_task.take()` 如何阻止双终态。
+3. 对比 Ctrl+C、SendNow、rewind、SessionDelete 的 `CancelOptions`，列出 wake、queue、subagent 和 background task 四列差异。
+4. 从 TerminalActor 的 biased `select!` 追一次 cancel，验证 command/channel close/root token 都进入 `shutdown_all()`。
+5. 用一个产生孙进程并保持 stdout pipe 的脚本解释为什么同时需要 process group、bounded wait、state-dump abort 和 drain timeout。
+6. 阅读 `AgentShutdownGuard` 的 join helper，说明为何它只适用于进程正在退出的 teardown，不能复用成常规线程池 join。
+
+真正可靠的取消实现不是“返回得快”，而是能指出每个 producer 已停止接收新工作、每个外部资源已回收、每个 waiter 已终结、每段需要持久化的数据已越过 flush barrier。只有这些证据同时成立，Session 才是真的从 Running 进入了可继续或可关闭的状态。

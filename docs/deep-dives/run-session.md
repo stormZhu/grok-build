@@ -42,7 +42,7 @@ flowchart LR
     mailbox --> loop[run_session\n事件循环]
     loop --> queue[queue_input\n进入 pending_inputs]
     queue --> starter[maybe_start_running_task]
-    starter --> turn[handle_prompt\n执行一轮 Turn]
+    starter --> turn[spawn_local run_task\n执行一轮 Turn]
     turn --> sampler[Sampler\n模型流式请求]
     sampler --> tools[工具调用 / MCP]
     tools --> turn
@@ -110,6 +110,174 @@ pub(super) async fn run_session(
 
 `SessionCommand` 的完整定义在 [`commands.rs`](../../crates/codegen/xai-grok-shell/src/session/commands.rs#L191)。初学时优先找 `Prompt`、`Cancel`、`Shutdown` 和 `SetSessionModel`，不用一开始读完所有命令变体。
 
+### 3.1 `ChatStateActor` 到底是什么
+
+> `ChatStateActor` 是 conversation 的**单一权威写入者**：它在一个独立 Tokio task 中持有全部对话状态，并按 channel 中的顺序逐条处理命令。
+
+这里的 Actor 不是 Rust 的特殊语法，而是一种并发组织方式：把可变状态和一个消息循环放在同一个任务里，其他任务只能发消息，不能直接拿到 `&mut conversation`。因此即使 Turn、compaction、恢复逻辑等异步任务都 clone 了 `ChatStateHandle`，最终修改仍会在一个地方串行发生。
+
+```mermaid
+flowchart LR
+    subgraph Producers[并发调用者]
+        S[SessionActor / run_session]
+        T[Turn 任务]
+        C[Compaction / rewind]
+    end
+
+    S --> H[ChatStateHandle\n可廉价 clone 的发送端]
+    T --> H
+    C --> H
+    H -->|ChatStateCommand\nmpsc mailbox| A[ChatStateActor\n单线程式串行处理]
+
+    subgraph Owned[Actor 独占]
+        V[conversation]
+        G[sampling_config]
+        P[prompt_index / prompt_texts]
+        U[token / usage / timing]
+        E[edited paths / turn capture]
+    end
+
+    A --> V
+    A --> G
+    A --> P
+    A --> U
+    A --> E
+    A -->|ChatPersistence| D[(持久化 Actor / 磁盘)]
+    A -->|ChatStateEvent| R[run_session]
+```
+
+源码中的结构与图一一对应：
+
+| 组件 | 持有什么 | 负责什么 | 不负责什么 |
+|---|---|---|---|
+| `ChatStateHandle` | `cmd_tx` | 把 mutation/query 包装成 `ChatStateCommand` 发入 mailbox；需要返回值时附带 oneshot | 不持有也不直接读取 conversation |
+| `ChatStateActor` | `ChatState`、`cmd_rx`、持久化接口、事件发送端 | 串行分发命令、维护不变量、构造请求、触发持久化和协调事件 | 不决定何时启动/取消 Turn |
+| `ChatState` | conversation、模型配置、prompt 序号、token/usage、时间和 turn capture 等 | Actor 内部的可变数据 | 不跨 task 共享，不需要 `Mutex` |
+| `run_session` | `chat_state_event_rx` | 消费需要 Session 层参与的协调信号 | 不把事件当成 conversation 的副本 |
+
+入口分别见 [`ChatStateHandle`](../../crates/codegen/xai-chat-state/src/handle.rs#L17)、[`ChatStateActor`](../../crates/codegen/xai-chat-state/src/actor/mod.rs#L30) 和内部 [`ChatState`](../../crates/codegen/xai-chat-state/src/actor/state.rs#L115)。Actor 在 [`spawn_session_actor`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/spawn.rs#L552-L562) 中创建，返回的 handle 放进 `SessionActor`，事件 receiver 则交给 `run_session`。
+
+### 3.2 两条方向相反的消息通道
+
+理解选中代码里的 `chat_state_event_rx`，关键是不要把 **Command** 和 **Event** 混为一谈：
+
+```text
+Session / Turn ── ChatStateCommand ──▶ ChatStateActor
+                    “请修改或查询状态”
+
+run_session    ◀── ChatStateEvent ─── ChatStateActor
+                    “状态变化后，请做会话级协调”
+```
+
+#### Command：调用者请求 Actor 做事
+
+命令定义在 [`commands.rs`](../../crates/codegen/xai-chat-state/src/commands.rs#L55)，大致分为三类：
+
+| 类型 | 例子 | 是否返回结果 |
+|---|---|---|
+| mutation | `PushUserMessage`、`PushAssistantResponse`、`PushToolResult`、`RecordTokenUsage` | 简单写入通常 fire-and-forget |
+| 带回复的 mutation | `PushUserMessageAndAck`、`AppendWorkingDirectorySwitchAndAck`、`RepairHistory`、`ReplaceSystemHead` | 通过 oneshot 返回；具体保证由每个命令单独定义 |
+| query / request build | `GetConversation`、`Snapshot`、`BuildConversationRequest`、auto-compact 检查 | 通过 oneshot 返回 Actor 处理到该命令时的一致结果 |
+
+query 也走 mailbox 非常重要。它保证“查询结果”位于明确的命令顺序上。例如队列是 `PushUser -> PushToolResult -> Snapshot`，那么 `Snapshot` 必定看见前两次修改；调用者不需要在共享 `Vec` 周围自行设计锁和竞态规则。
+
+`Ack` 的语义不能一概而论：`PushUserMessageAndAck` 确认的是 Actor 已接受并处理消息；它不自动承诺数据已经 durable 到磁盘。`AppendWorkingDirectorySwitchAndAck` 才显式等待 generation-aware 的持久化确认，并区分 `Appended`、`AlreadyPresent` 和不确定错误。阅读调用点时应以对应 command/handle 的注释为准，不要仅凭方法名猜测持久化强度。
+
+#### Event：Actor 通知 `run_session` 协调外围状态
+
+事件定义在 [`events.rs`](../../crates/codegen/xai-chat-state/src/events.rs#L7)。当前主要有：
+
+| 事件 | 何时产生 | `run_session` 如何处理 |
+|---|---|---|
+| `ConversationReset` | compaction、rewind 或恢复导致权威历史整体替换 | 重置 idle-flush 基线，重新允许 memory context 注入检查 |
+| `ImageBudget` | 构造含图片的模型请求并计算/执行图片淘汰 | 写入统一遥测日志，记录请求体大小和淘汰数量 |
+| `PromptIndexChanged` | 新 user turn 推进 prompt 序号 | 当前只作信息通知；需要值时再 query Actor |
+| `TokensUpdated` | 模型用量更新 | 当前只作信息通知；阈值判断读取 Actor 权威状态 |
+
+这些 Event **不是持久化消息，也不是完整状态同步**。`ChatStateActor` 已通过自己独占的 `ChatPersistence` 处理历史写入；事件只把确实跨越 ChatState/Session 边界的副作用交回 `run_session`。
+
+### 3.3 一次 Prompt 中它怎样参与
+
+下面把 `ChatStateActor` 放回一次真实 Turn。为突出状态顺序，省略了 replay buffer、memory 和部分采样细节：
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant SessionLoop as run_session
+    participant Turn as handle_prompt / Turn task
+    participant Handle as ChatStateHandle
+    participant ChatActor as ChatStateActor
+    participant Store as ChatPersistence
+    participant Sampler as Sampler / Model
+
+    SessionLoop->>Turn: 启动队首 Prompt
+    Turn->>Handle: push_user_message_and_ack(user)
+    Handle->>ChatActor: PushUserMessageAndAck + reply
+    ChatActor->>ChatActor: 修复上一轮 dangling tool call<br/>追加 user，更新 token 估算
+    ChatActor->>Store: 提交 persist_message
+    ChatActor-->>Handle: ack（Actor 已处理，不代表 durable）
+
+    Turn->>Handle: build_conversation_request(tools, memory, ids)
+    Handle->>ChatActor: BuildConversationRequest + reply
+    ChatActor->>ChatActor: 校验历史；在 request clone 上<br/>处理图片预算、旧 tool result 和 reminder
+    ChatActor-->>Turn: ConversationRequest
+    Turn->>Sampler: 发送权威历史构造出的请求
+    Sampler-->>Turn: assistant delta / tool calls / usage
+
+    Turn->>Handle: push_assistant_response(...)
+    Handle->>ChatActor: PushAssistantResponse
+    ChatActor->>Store: persist assistant item
+    Turn->>Handle: push_tool_result(...)
+    Handle->>ChatActor: PushToolResult
+    ChatActor->>Store: persist tool result
+    Turn->>Handle: record_token_usage(...)
+    Handle->>ChatActor: RecordTokenUsage
+    ChatActor-->>SessionLoop: TokensUpdated
+```
+
+模型请求不是调用者从某个共享 conversation 随手 clone 出来的，而是通过 `BuildConversationRequest` 让 Actor 构造。构造过程会先维护 tool-call/result 完整性，再基于权威历史生成工作副本；图片淘汰、旧工具结果 soft trim 和临时 memory reminder 主要作用在这个请求副本上，不应误解为永久删除历史。实现见 [`request_builder.rs`](../../crates/codegen/xai-chat-state/src/actor/request_builder.rs#L20-L130)。
+
+### 3.4 为什么需要“单一权威写入者”
+
+假设没有 `ChatStateActor`，Turn 和 compaction 都直接读写一个共享 `Vec<ConversationItem>`：
+
+```text
+Turn:       读历史 A ─────────── 追加 tool result C
+Compaction:      读历史 A ── 生成摘要 B ── 用 B 覆盖历史
+
+可能结果：C 被 B 的旧快照覆盖，工具结果丢失。
+```
+
+使用 Actor 后，单次 mutation 都进入同一个 mailbox，因此会得到唯一顺序：
+
+```text
+PushUser -> PushAssistant -> PushToolResult -> Snapshot
+```
+
+但这里有一个重要限制：Actor 只能保证**每条命令**是串行的，不能自动把调用者发出的“`GetConversation` -> 本地修改 -> `ReplaceConversation`”两条命令合成事务。两者之间仍可能插入 `PushToolResult`，随后旧快照覆盖新结果。
+
+```mermaid
+flowchart TD
+    Q[需要复合修改] --> A{能否封装成一条 Actor command?}
+    A -->|能| ONE[在同一 handler 内读取并修改\n例如 ReplaceSystemHead / RepairHistory]
+    A -->|不能| B{Session 生命周期能否排除并发 Turn?}
+    B -->|能| SAFE[在安全边界 snapshot + replace\n例如受 Session 调度约束的 compaction]
+    B -->|不能| RACE[仍有 stale snapshot 风险\n需要重新设计命令边界]
+```
+
+所以真正的规则是：简单写操作靠 mailbox 排序；需要“读后再写”的复合操作，要么封装进一条 Actor command，要么由 `SessionActor` 保证期间没有并发 Turn。源码中的 `ReplaceSystemHead` 正是为了避免调用方 `GetConversation + ReplaceConversation` 的竞态。
+
+在这个边界下，该设计提供了四个关键保证：
+
+1. **单写者**：conversation 只在 Actor task 内突变，不需要跨 task 的 `Mutex<Vec<_>>`。
+2. **有序性**：user、assistant、tool result、token 和快照查询共享同一命令序列。
+3. **操作边界明确**：状态修复、内存更新和持久化提交集中在 handler；需要更强 durability 时使用定义了严格 ack 的专用命令。
+4. **职责隔离**：`SessionActor` 管 Turn 生命周期与外围资源；`ChatStateActor` 管模型下一轮真正依据的对话状态。
+
+因此可以用一句分工口诀收尾：
+
+> `run_session` 决定“现在处理哪件事”，Turn 决定“这一轮如何执行”，`ChatStateActor` 保证“模型历史按什么顺序变化”。
+
 ## 4. 进入循环前：一次性启动准备
 
 `run_session` 在进入 `loop` 前做了一批准备工作。它们可以分为“启动辅助设施”和“启动后台任务”两类。
@@ -134,14 +302,14 @@ sequenceDiagram
     participant Producer as 通知生产者
     participant Buffer as ReplayBuffer
     participant Timer as flush timer
-    participant Loop as run_session
+    participant SessionLoop as run_session
     participant Client as 客户端
 
     Producer->>Buffer: SessionEvent::Notification
-    Timer->>Loop: SessionEvent::FlushReplay
-    Loop->>Buffer: flush()
-    Buffer-->>Loop: 合并后的通知
-    Loop->>Client: emit_buffered(notification)
+    Timer->>SessionLoop: SessionEvent::FlushReplay
+    SessionLoop->>Buffer: flush()
+    Buffer-->>SessionLoop: 合并后的通知
+    SessionLoop->>Client: emit_buffered(notification)
 ```
 
 代码位置：[`run_loop.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs#L182-L196) 和 [`replay_events.rs`](../../crates/codegen/xai-grok-shell/src/session/replay_events.rs#L106)。
@@ -248,6 +416,8 @@ ChatState 是对话状态的权威来源。`run_session` 不重新计算整个�
 - `ImageBudget`：记录图片大小和淘汰数量的遥测；
 - `PromptIndexChanged`、`TokensUpdated`：信息性通知，实际数据由消费者按需查询。
 
+完整的状态所有权、Command/Event 双向通道和一次 Prompt 的交互时序见 [3.1 `ChatStateActor` 到底是什么](#31-chatstateactor-到底是什么)。
+
 代码见 [`run_loop.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs#L369-L415)。
 
 ### 5.6 SessionEvent 与 replay buffer
@@ -279,7 +449,66 @@ ChatState 是对话状态的权威来源。`run_session` 不重新计算整个�
 
 `queue_input` 只负责排队和处理队列策略；它不负责请求模型。真正启动位置是 `maybe_start_running_task`，实现位于 [`notification_drain.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/notification_drain.rs#L115)。
 
+它是 `SessionActor` 的异步方法，不是一个队列对象，也不是 Turn：
+
+```rust
+async fn queue_input(&self, request: QueueInputRequest) -> bool
+```
+
+调用 `.queue_input(...)` 会先得到一个 Future；Prompt 分支对它 `.await` 后，才完成这次入队。它主要做五件事：
+
+1. 从 `QueueInputRequest` 取出 prompt 内容、ID、回复 channel、显示元数据和 `send_now` 等请求参数。
+2. 记录 prompt 历史，并处理用户输入对合成任务、trace 和队列状态的影响。
+3. 将这些数据组成 `InputItem`，写入 `state.pending_inputs`（一个 `VecDeque`）。普通 Prompt 放到队尾。
+4. 对 `send_now` 或可中断等待中的自动插队，计算插入位置；通常插在正在运行的队首之后，让它成为下一轮候选。
+5. 广播最新队列给客户端，并返回 `cancel_running_turn`：`true` 表示调用方随后应取消当前 Turn。
+
+它的返回值不是“入队是否成功”，而是“这个新输入的队列策略是否要求先停止当前 Turn”。Prompt 分支紧接着执行的逻辑正是：
+
+```rust
+let cancel_running_turn = session.queue_input(request).await;
+if cancel_running_turn {
+    session.cancel_turn_for_send_now(&mut replay_buffer).await;
+}
+SessionActor::maybe_start_running_task(session.clone(), completion_tx.clone()).await;
+```
+
+因此，即使 `queue_input` 已经把 Prompt 放进队列，也不代表模型调用已经开始；只有最后一步发现当前没有 `running_task` 时，才会从队首提升输入并 spawn Turn。
+
 ### 6.3 Turn 在哪里执行
+
+Turn 是异步执行的。`maybe_start_running_task` 创建 `AgentTask::new_prompt`，后者通过下面的形式启动本地 Tokio task：
+
+```rust
+tokio::task::spawn_local(async move {
+    run_task(...).await
+});
+```
+
+因此 `run_session` 启动 Turn 后不会 `.await` 它的完整模型调用和工具循环，而是继续回到自己的 `select!`，仍可接收后续 Prompt、Cancel 和状态事件。Turn 完成时，任务把 `PromptTurnResult` 发送到 `completion_tx`，由 `completion_rx` 分支统一收尾。
+
+这里的“异步”是同一 `LocalSet` 上的协作式并发，不代表自动多线程并行：一个阻塞的同步操作仍会卡住同一线程。同时，`running_task` 状态保证同一个 Session 最多只有一个前台 Turn；新 Prompt 会排队，或按 `send_now` 规则先取消旧 Turn。
+
+可以把这两个 task 的时间关系看成：
+
+```text
+run_session（Actor task）
+  select! 收到 Prompt
+  -> queue_input(...).await
+  -> AgentTask::new_prompt / spawn_local
+  -> 回到 select!，继续接收 Cancel、下一条 Prompt、计时器和状态事件
+                                                        ^
+                                                        | completion_tx.send(...)
+Turn task                                               |
+  run_task(...)                                         |
+  -> handle_prompt(...)                                 |
+  -> 在模型 HTTP、channel、工具 I/O 等 await 点让出执行权 -----+
+  -> 结束后生成 PromptTurnResult
+```
+
+`spawn_local` 只是把 Turn 注册到当前 `LocalSet` 的调度器；它不会在这一行立刻并行跑完。运行时会在合适的时机 poll Turn。每当 Turn 遇到 `.await` 并返回 `Pending`，同一线程就可以去 poll `run_session` 或其他 local task；外部结果到达后，waker 再唤醒对应任务继续执行。
+
+取消也依赖这条边界：`AgentTask` 保存的是 Turn 的 `AbortHandle`。主循环收到 Cancel 后可以执行取消和状态收尾，而不必等待 `handle_prompt` 自然返回。被 abort 的 Turn 不会继续运行到 `completion_tx.send(...)`；主循环的取消路径负责清理 `running_task`、刷新必要的通知，并决定何时允许下一条队列输入启动。
 
 Turn 入口是 [`handle_prompt`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/turn.rs#L241)。它会继续处理：
 

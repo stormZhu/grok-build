@@ -36,7 +36,7 @@
 | [13-contribution-projects.md](./13-contribution-projects.md) | 从低风险文档/纯函数到 Tool、Session、协议、认证和扩展的阶段化贡献项目 |
 | [14-project-learning-map.md](./14-project-learning-map.md) | 项目学习地图：按一条用户旅程连接架构、源码、可运行实验和验证证据 |
 | [15-runtime-debugging-playbook.md](./15-runtime-debugging-playbook.md) | 运行时调试：从 Prompt、Turn、工具、取消、关闭和 UI 症状定位状态 owner |
-| [源码精读](./deep-dives/README.md) | 针对具体函数、控制流和子系统的专题阅读；包含完整消息流、采样、认证与模型选择、配置分层/运行时解析、工具调用、MCP 生命周期/dispatcher、Leader、子代理/Workflow、权限沙箱、Workspace rewind/worktree、扩展生命周期、Pager 渲染、持久化重放和可观测性时间线 |
+| [源码精读](./deep-dives/README.md) | 针对具体函数、控制流和子系统的专题阅读；包含完整消息流、采样、上下文压缩、认证与模型选择、配置分层/运行时解析、工具调用、终端进程、MCP 生命周期/dispatcher、Leader、子代理/Workflow、权限沙箱、Workspace rewind/worktree、扩展生命周期、Pager 渲染、持久化重放和可观测性时间线 |
 
 ---
 
@@ -80,6 +80,8 @@ Rust 基础薄弱或尚不能独立解释仓库中的组合类型、trait 和异
 28. **源码精读 / resources-and-capability-injection** — 理解工具依赖、session 能力、取消和持久化资源如何注入与重建
 29. **源码精读 / host-modes-and-entrypoints** — 区分 `grok -p`、relay headless、stdio 与 Leader 的真实入口和生命周期
 30. **源码精读 / cancellation-and-shutdown** — 理解取消、超时、replay flush、工具进程和子代理关闭的跨层不变量
+31. **源码精读 / context-compaction-lifecycle** — 理解 pruning、自动阈值、two-pass、full-replace、token reseed 和 checkpoint 恢复
+32. **源码精读 / terminal-command-and-process-lifecycle** — 理解 Bash 如何跨本地/ACP backend 管理输出、后台任务和完整进程树
 
 ---
 

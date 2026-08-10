@@ -128,6 +128,14 @@ loop {
 5. `reset()` 是 `Sleep` 提供的 pin-aware 修改 API。
 6. `if` guard 在功能禁用时不 poll 分支；`Duration::MAX` 同时提供不会正常到期的初始 deadline。
 
+这里的两个机制分工不同：`if` 才是“禁用本次等待”的开关，条件为 `false` 时该分支不能获胜；`Duration::MAX` 则是 `None` 时的占位 `Sleep`。即使功能关闭，下面的分支在编译时仍必须能引用一个类型固定的 `idle_flush_sleep`，才能在 loop 外 pin 并在同一份 `select!` 中复用：
+
+```rust
+_ = &mut idle_flush_sleep, if session.idle_flush_timeout.is_some() => { ... }
+```
+
+也可以保存 `Option<Sleep>`，但那样需要在 `select!` 内把 `None` 转为一个永远 `Pending` 的 Future，或复制分支逻辑。远未来的 `Sleep` 使这一处状态和类型保持简单；它不是第二次条件判断。
+
 ## Pin 与取消安全不是同一件事
 
 把 future pin 住，不代表它可以被随时 drop 后无损重建。`select!` 中其他分支获胜时，未获胜分支本轮建立的 future 会被 drop；是否丢数据由该操作的 cancellation safety 决定。

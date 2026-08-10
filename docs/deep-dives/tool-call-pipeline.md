@@ -255,3 +255,294 @@ cargo run --locked \
 ```
 
 程序还构造了一条只有 Progress、随后 channel 关闭的错误流，并断言它不能被当作成功。示例没有实现真实 `ToolRegistryBuilder`、schema 生成、MCP、文件读取或 ACP 通知；它用于掌握契约顺序，生产证据仍应来自 runtime/registry/session 的 focused tests。
+
+---
+
+## 11. 批次不是简单的 `join_all`
+
+[`execute_tool_calls()`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/tool_calls.rs) 收到的是一次模型响应中的整个 tool-call 数组。它没有把数组直接交给 `join_all`，而是分成三个阶段：
+
+```text
+原始 calls
+  -> 必要时拆成普通 body 与 ExitPlan tail
+  -> 每个 batch 顺序 prepare
+  -> approved calls 并发 dispatch
+  -> 按实际完成顺序 post-flight
+  -> batch 全部结束后提交 deferred followups
+```
+
+这三个顺序分别解决不同问题：
+
+- **prepare 顺序**固定权限框、hook 和可见 start event 的先后；
+- **dispatch 并发**让互不依赖的读取和远程调用不必串行等待；
+- **post-flight 完成顺序**及时呈现先完成的结果，而不是被最慢的第一个调用阻塞。
+
+### 11.1 ExitPlan 为什么必须进入 tail
+
+`split_exit_plan_tail()` 按 `ToolKind::ExitPlan` 而不是硬编码工具名字识别退出计划模式的调用。普通 body 先完整执行，ExitPlan tail 再作为下一批运行。
+
+假设模型在同一响应中产生：
+
+```text
+1. write_file(plan.md)
+2. exit_plan_mode()
+```
+
+如果两者并发，退出审批可能在计划文件落盘前开始；批准者看到的状态与后续实现读取的文件可能不一致。tail 是一个批次屏障：
+
+```text
+all(body terminal + post-flight) happens-before prepare(exit-plan)
+```
+
+这是语义依赖，不是性能优化。新增类似“提交”“切换模式”“结束阶段”的工具时，应先判断它是否也需要成为 barrier，而不是只看它是否读写文件。
+
+### 11.2 遇到终止性 prepare 结果后，剩余调用仍需闭合
+
+某个调用在 prepare 阶段得到 `PermissionReject`、`Cancelled` 或 `FollowupMessage` 后，本批次不会继续批准后续调用。但后续 tool-call ID 不能无声消失；代码会为它们写入合成 tool result，说明因更早的拒绝或取消而未执行。
+
+否则对话历史会出现 assistant 声明了 N 个 tool calls、却只有前 K 个 result 的不完整结构。某些模型 API 要求每个 call ID 都有对应结果，缺口不仅影响 UI，还可能使下一次 sampling 请求无效。
+
+## 12. `prepare_tool_call` 是不可信输入的收敛点
+
+模型给出的 name、arguments 和 call ID 都是外部输入。prepare 阶段把它们收敛成 `PreparedToolCall`，后续 dispatch 不再重复猜测：
+
+```text
+wire name + argument string
+  -> 名称/MCP progressive discovery
+  -> 空参数归一化
+  -> JSON parse 与受限恢复
+  -> ToolInput 语义解析
+  -> tool kind / read-only / dispatch target
+  -> start notification + hook + permission/plan gate
+  -> PreparedToolCall
+```
+
+`PreparedToolCall` 保存 call ID、ACP tool-call ID、请求名称、原始参数、解析后的 JSON、model ID、实际 dispatch target、read-only 分类和畸形 JSON 恢复计数。观测、权限和执行应引用同一个 prepared snapshot，避免各层对原始字符串进行略有不同的二次解析。
+
+### 12.1 空参数与畸形 JSON 恢复
+
+空 arguments 会先归一成合法 JSON。普通解析失败时，helper 还会识别“多个 JSON object 被错误拼接”的特定形状，并选择与工具 schema 最匹配的一项。
+
+这不是无限容错：
+
+- 只在能可靠提取多个完整 object 时恢复；
+- 记录 `concatenated_json_count`；
+- 只执行最佳匹配的一项；
+- 在模型可见 `prompt_text` 中追加 system reminder，明确其余对象没有执行；
+- UI/telemetry 仍保留原始输入，不能伪装成模型一开始就发对了。
+
+```text
+{"path":"a"}{"path":"b"}
+        │
+        ├─ execute best match only
+        └─ result reminder: remaining operation must be a separate call
+```
+
+如果恢复后悄悄把两个对象都执行，会把一次 call ID 变成多个副作用，权限、hook、重放和 result correlation 都失去一一对应关系。
+
+### 12.2 client-facing name 与 dispatch target 可以不同
+
+兼容层、MCP namespace 和工具名 override 可能让模型请求的名称与真正 registry target 不同。`PreparedToolCall` 同时保留 requested name 和 `dispatch_target_name`；成功结果还可能给出 `effective_tool_name`。
+
+排障时应分别问：
+
+```text
+模型请求了什么？       requested tool name
+registry 实际路由什么？ dispatch target
+结果归因给什么？       effective tool name
+```
+
+只记录其中一个名字会让 unknown-tool、MCP auth retry 和 telemetry 很难对齐。
+
+## 13. 并发执行如何保留身份和局部顺序
+
+通过 prepare 的调用被转换成 futures，放入 `FuturesUnordered`。每个 future 返回：
+
+```text
+(approved_index, Result<ToolRunResult, ToolError>, duration_ms)
+```
+
+结果可能按 `2, 0, 1` 的顺序完成；`approved_slots[index].take()` 用原始 index 找回唯一的 `PreparedToolCall`。`take()` 还把“一项只能完成一次”变成运行时断言，重复 index 会立即暴露，而不是重复写 tool result。
+
+### 13.1 `call_id` 是历史 join key
+
+并发结果不能用完成顺序关联 assistant tool call。真正的 join key 是模型 call ID/ACP tool-call ID。若 call ID 为空，代码会告警并为内部观测合成 batch-index key，但这只是降级路径，不应成为正常协议。
+
+### 13.2 同一文件的写操作局部串行化
+
+batch 在 dispatch 前收集非只读调用的 `lock_path_for_args()`，为相同路径创建共享 `Mutex`。future 仍可一起进入调度，但同一路径的写调用在真正 dispatch 前获取相同锁：
+
+```text
+edit(a.rs) ─┐
+            ├─ mutex("a.rs") -> sequential
+write(a.rs) ┘
+
+read(b.rs) ------------------> concurrent
+web_search ------------------> concurrent
+```
+
+锁只解决当前 batch 内可识别的文件路径冲突，不是通用事务：
+
+- 一个命令可能间接修改多个未知文件；
+- 两个不同路径可能通过 symlink 指向同一对象；
+- 跨 batch/跨 session 的一致性由更高层 workspace 或工具自身负责；
+- 锁不能代替 edit 的 before/after 校验。
+
+所以 `is_read_only` 和 path extraction 是并发正确性的一部分，不只是 UI 元数据。
+
+### 13.3 为什么使用 drainer task
+
+`FuturesUnordered` 由独立 drainer 消费，并通过 channel 把已完成项交回 actor 的 post-flight 循环。drainer 包在 `AbortOnDrop` 中：外层提前返回或被取消时，未完成的聚合任务不会失去 owner 后继续存活。
+
+这是结构化并发的局部实现：spawn 出去的工作必须有与调用作用域绑定的回收句柄。
+
+## 14. 可中断等待工具与普通工具不同
+
+`get_task_output`、等待 task/subagent 完成等工具可能长时间阻塞，但它们不一定在做不可中断的副作用。当用户 interject 新消息时，继续等待会让新输入无法接管 turn。
+
+对于识别出的 interruptible wait，dispatch 使用 biased `select!`：
+
+```text
+tool result ready              -> 使用真实结果
+pending interjection ready     -> 返回 interrupted-wait synthetic result
+```
+
+`BlockingWaitGuard` 维护嵌套等待深度，确保 UI/turn 状态知道当前是在等待外部任务。普通 edit/bash 不应套用这条捷径，因为把一个正在产生副作用的调用“伪装成已中断结果”并不能停止真实操作；它们必须走正式 cancellation/进程 kill。
+
+## 15. 一次认证恢复只能有一个 owner
+
+多个并发工具可能同时遇到 auth failure。如果每个 future 都独立刷新凭据，会产生刷新风暴和相互覆盖。batch 共享 `OnceCell<bool>`，`call_with_auth_retry` 用它协调一次恢复结果。
+
+Managed MCP 还有一次 post-dispatch reactive reauth：错误既可能表现为 Rust `Err`，也可能是 `Ok(ToolRunResult)` 但 `output.is_error()` 且文本表示认证拒绝。恢复成功后只重试该调用，并把重试耗时累加到 duration。
+
+需要维护：
+
+- 只有明确的 auth rejection 才重试；
+- retry 仍使用同一 tool-call identity；
+- start/finish telemetry 能表达 retry，而不是制造第二个逻辑调用；
+- 非幂等工具不能因宽泛字符串匹配被随意重放。
+
+## 16. Progress、Terminal、ACP update 和 ChatState 是四种不同东西
+
+运行时流定义在 [`tool.rs`](../../crates/common/xai-tool-runtime/src/tool.rs)：
+
+```text
+Progress* -> exactly one Terminal(Result<Output, ToolError>)
+```
+
+`ToolProgress` 可以是 text、rich content 或带稳定 subkind 的 custom payload。流式 Bash 等实现还使用 [`streaming.rs`](../../crates/common/xai-tool-runtime/src/streaming.rs) 中的 canonical partial-result payload，避免 producer 和 consumer 各自发明字段。
+
+四条载荷要分开理解：
+
+| 载荷 | 生命周期 | 主要消费者 |
+|---|---|---|
+| `Progress` | 调用进行中，可有多条 | session adapter、实时 UI |
+| `Terminal(Result<...>)` | 调用协议终点，恰好一次 | runtime/session |
+| ACP `ToolCallUpdate` | UI/远端客户端可观察状态 | Pager、ACP client |
+| ChatState tool result | 下一次模型 sampling 的历史事实 | prompt builder/model |
+
+一条 progress 已经显示在 UI，不表示模型历史已经有 tool result；终态输出序列化成功，也不表示 ACP completion 已发出。修复任何一条通道时都要检查另外三条的一致性。
+
+### 16.1 为什么缺少 Terminal 必须报协议错误
+
+stream channel EOF 可能来自 producer panic、取消错误或 adapter bug。若把 EOF 当作成功，调用方拿不到结构化 output，却可能继续下一轮模型推理。
+
+`ToolDispatch::call_terminal()` 会丢弃 progress，遇到第一条 Terminal 返回；若 stream 先结束，产生 `stream_no_terminal`。工具测试还应覆盖反向违规：Terminal 后继续发 progress/第二个 Terminal。即使消费者会在第一条 Terminal 短路，producer 仍违反协议并可能隐藏资源泄漏。
+
+### 16.2 类型擦除发生在哪里
+
+具体 `Tool` 的 `Args`/`Output` 保持强类型；`ToolDyn`/`ToolDispatch` 边界把 args 变为 JSON，把 terminal output 变为 `TypedToolOutput`：
+
+```text
+typed output
+  ├─ serialized Value
+  ├─ model_output: Vec<ContentBlock>
+  └─ optional chat_completion_output
+```
+
+默认 `ToolOutput` 会从序列化值生成非空模型内容，满足 MCP content invariant。自定义实现仍不能返回“UI 有数据、model_output 为空”的半成品。
+
+## 17. Post-flight 才决定这次调用对系统意味着什么
+
+dispatch 返回后，`handle_bridge_tool_success()` / `handle_tool_error()` 负责：
+
+- 把结构化 output 转成 ACP terminal update；
+- 更新 plan、文件 hunk、任务或 Git/PR signals；
+- 运行 PostToolUse hook，并保存 hook 结果；
+- 构造、清洗或追加 reminder 后的 `prompt_text`；
+- 以 call ID 向 ChatState 写入 tool result；
+- 收集 deferred followup messages；
+- 发出 completion telemetry。
+
+工具成功与 pipeline 成功也不完全相同。`ToolRunResult.output.is_error()` 可能让一个 Rust `Ok` 在产品语义上仍算失败；反过来，某些可恢复域错误会被规范化为模型可读 result，让 agentic loop 继续，而不是把整个 SessionActor 弄崩。
+
+### 17.1 followup 为什么延迟到整批结束
+
+PostToolUse hook 或工具结果可能生成 user followup。代码先收集到 `deferred_followups`，所有 batch 结束后才写入 ChatState，然后 drain pending interjections 和 skill reminders。
+
+如果第一个完成的并发工具立刻插入 user message，剩余 tool result 会落在它后面，破坏一次 assistant multi-call 与其结果的结构。延迟提交建立顺序：
+
+```text
+assistant tool calls
+  -> all corresponding tool results
+  -> hook/tool generated user followups
+  -> next sampling
+```
+
+## 18. 工具管线的不变量清单
+
+| 不变量 | 违反后的表现 |
+|---|---|
+| 每个 assistant call ID 最终有一个 result | 下一次模型请求无效或调用永久 pending |
+| Progress 后恰好一个 Terminal | EOF 被误判成功、资源无法确定完成 |
+| prepare 使用同一份 parsed snapshot | 权限检查内容与实际执行内容不一致 |
+| ExitPlan 在普通调用之后 | 审批看到未落盘或未完成的计划 |
+| 同一路径写在 batch 内串行 | 两个 edit 互相覆盖 |
+| 并发结果按 call ID 关联 | UI/ChatState 把结果配给错误调用 |
+| auth retry 有单一协调 owner | 并发刷新风暴、非幂等重复执行 |
+| followup 晚于所有 tool results | conversation role/order 结构损坏 |
+| UI output 与 prompt_text 都完整 | 用户和模型对执行事实认知不一致 |
+| cancellation 拥有 drainer/child 回收路径 | future 结束后进程或 task 仍存活 |
+
+## 19. 更完整的测试与阅读练习
+
+### 19.1 Runtime contract
+
+- `run()` 默认包装为单 Terminal；
+- progress 0/1/N 条后成功或错误 Terminal；
+- stream 无 Terminal 返回 `stream_no_terminal`；
+- typed output 序列化失败成为 terminal execution error；
+- model output 至少一个 content block；
+- custom progress payload 的 producer/consumer schema 一致。
+
+### 19.2 Registry/definition
+
+- static 与 dynamic description 的 per-turn listing；
+- `should_list=false` 时 manifest 不暴露但内部元数据行为明确；
+- ToolId、ToolKind、client-facing name 和 override 映射；
+- required resource 缺失时 finalize 失败，而不是首次调用才 panic；
+- MCP 重注册、同名冲突和 builtin-only definition。
+
+### 19.3 Session integration
+
+- mixed body + ExitPlan 的 barrier；
+- 第二个 prepare 被拒绝时，后续 call ID 得到合成结果；
+- 并发调用按不同顺序完成仍正确关联；
+- 同一路径 edit 不重叠，不同路径可以重叠；
+- interjection 打断 wait tool，但不伪取消副作用工具；
+- 并发 auth failure 只触发一次协调恢复；
+- concatenated JSON 只执行一次并附 reminder；
+- followup 在全部 tool results 之后；
+- cancel 时 drainer、terminal 和 pending responses 都有 owner。
+
+### 19.4 阅读练习
+
+1. 从 `Tool::execute` 追到 `ToolDyn`，标出强类型在哪一行变成 JSON，又在哪一行形成 `TypedToolOutput`。
+2. 用三个不同完成延迟的 fake tool 驱动 `FuturesUnordered`，证明 index/call ID 而非完成位置负责关联。
+3. 构造两个写同一路径和一个读其他路径的 batch，用 barrier 证明局部串行而非全局串行。
+4. 追 `split_exit_plan_tail` 到测试，解释为什么按 `ToolKind` 判断比按 wire name 稳定。
+5. 追一个成功 output 的 `output -> prompt_text -> ACP update -> ChatState` 四条投影，列出每条的内容和 owner。
+6. 注入 progress 后 EOF，验证 UI 即使看到部分文本，ChatState 也不会生成伪成功结果。
+7. 注入第一个工具的 PostToolUse followup，检查它不会插进同批其他 tool result 之前。
+
+这组练习的目标不是记住所有特殊工具，而是能把任何一次 tool call 分解为 definition、prepare、dispatch、stream、post-flight 和 history commit 六个阶段，并为每个阶段找到独立证据。

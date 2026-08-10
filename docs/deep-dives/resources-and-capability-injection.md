@@ -308,3 +308,268 @@ cargo run --locked \
 6. [xai-grok-shell/src/session/acp_session_impl/spawn.rs](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/spawn.rs) 与 [agent_rebuild.rs](../../crates/codegen/xai-grok-shell/src/session/agent_rebuild.rs)：动态 resource 的重建注入。
 
 读完后，你应该能对每个“我需要把这个对象传给工具”的改动回答四个问题：它归谁所有、存活多久、能否恢复、session rebuild 后由谁重新提供。能回答这四个问题，通常就能避免最隐蔽的 agent runtime 生命周期 bug。
+
+## 9. 两个 TypeId 容器的精确语义
+
+`TypedExtensions` 与 `Resources` 都按 Rust 类型索引，但存储形式、共享方式和覆盖规则不同：
+
+| 维度 | `TypedExtensions` | `Resources` |
+|---|---|---|
+| key | `TypeId` | `TypeId` |
+| value | `Arc<dyn Any + Send + Sync>` | `Box<dyn Any + Send + Sync>` |
+| clone 容器 | 廉价 clone 每个 `Arc` | 不直接 clone，由 `Arc<Mutex<_>>` 共享 |
+| 主要生命周期 | call 或 list-tools | finalized toolset / session |
+| 持久化 | 无 | 仅显式注册的 `Params` / `State` |
+| 同类型 insert | 替换旧 `Arc` | 替换旧 `Box` |
+| 并发访问 | clone 后无需容器锁 | 需短暂获取 `Mutex` |
+
+### 9.1 一个类型只能有一个槽位
+
+下面两次插入不会保存两个路径：
+
+```rust
+extensions.insert(PathBuf::from("/model-visible"));
+extensions.insert(PathBuf::from("/real-worktree")); // 覆盖前者
+```
+
+这就是 runtime 用 `Cwd(PathBuf)`、`TraceContext(String)`、`SessionContext(String)`、`BehaviorVersion(String)` 等 newtype 的原因。newtype 不只是可读性包装，它创建不同的 `TypeId`，把“工作目录”“trace header”“session ID”从容器层面隔离。向 typed store 放裸 `String`、`bool` 或 `PathBuf` 时，应先问同一生命周期内是否可能出现第二个同底层类型的概念；多数情况下答案是会。
+
+`Params<T>` 与 `State<T>` 也利用同一性质：即使内部 `T` 相同，`TypeId::of::<Params<T>>() != TypeId::of::<State<T>>()`。这让 effective configuration 与 runtime state 可以同时存在，并分别进入 `params` 和 `state` 持久化 category。
+
+### 9.2 `merge_defaults` 定义了 override 优先级
+
+`TypedExtensions::merge_defaults` 只复制目标中尚不存在的类型：
+
+```text
+per-call extensions: Cwd(/override)
+defaults:            Cwd(/session), BehaviorVersion(v2)
+
+merge_defaults 后:  Cwd(/override), BehaviorVersion(v2)
+```
+
+因此调用者的显式 override 胜过 dispatcher 默认值。若实现成普通 `extend`，默认 cwd 会反向覆盖 per-call cwd，测试可能在主 workspace 通过，却在显式工作目录或远端 bind 时访问错误路径。
+
+### 9.3 `ToolCallContext` 与 `ListToolsContext` 不共享 store
+
+`ListToolsContext` 用于 `description(ctx)` / `should_list(ctx)`，决定本轮向模型展示哪些工具和描述；`ToolCallContext` 用于真正执行。两者各自拥有 `TypedExtensions`，不能假设 listing 阶段写入的值会自动出现在 call 中。
+
+这个分离维持一个重要安全边界：
+
+```text
+工具可见性/描述上下文 != 工具执行授权
+```
+
+例如 viewer flag 可以让 description 声明 streaming progress，但实际 call 仍必须由 dispatcher 重新注入对应 context。只在 listing 里检查 capability、执行时不检查，会形成 time-of-check/time-of-use 缺口；只在 call 里注入、listing 不注入，则模型看到的 schema/描述可能与实际能力不一致。
+
+## 10. Fail closed 的上下文解析
+
+`WorkspaceViewerContext` 的字段默认关闭，`WorkspaceBindMetadata` 对每个可选字段使用 default 与容错反序列化。它表达的是：来自不同版本 emitter 的 metadata 可以部分损坏，但损坏值不能意外开启能力。
+
+| wire 情况 | 结果 | 安全意义 |
+|---|---|---|
+| `viewer_ctx` 缺失 | `None` / 默认上下文 | 不启用新特性 |
+| `stream_tool_progress` 缺失 | `false` | 老 client 不会被强行切到 streaming |
+| 某字段类型错误 | 该字段回落 default | 合法 sibling 仍可读取，错误字段不升级权限 |
+| 未知新字段 | serde 忽略 | 前后版本可增量演进 |
+| `yolo_mode` 缺失 | `None` | consumer 不得推断为自动批准 |
+
+这里要区分“兼容性宽容”和“授权宽容”。metadata parser 可以容忍未知/格式错误字段以保持连接，但 capability consumer 必须把缺失解释为关闭。新增 bool 时使用 `#[serde(default)]` 只是第一步，还应检查下游是否存在 `unwrap_or(true)` 一类反向默认。
+
+`BehaviorVersion` 则采用另一种策略：工具若按版本分支，遇到未知值必须 hard error。feature flag 适合 fail closed；行为协议版本若静默回退，可能让同一 tool schema 产生不同语义。两者不能套用同一种 fallback。
+
+## 11. Resources 的读取、创建与动态访问
+
+### 11.1 `get`、`require`、`get_or_default` 表达不同契约
+
+```text
+get<T>()             optional capability；调用者决定 None 的含义
+require<T>()         必需 capability；缺失返回 code=missing_resource
+get_or_default<T>()  此处拥有初始化权；缺失时创建 T::default()
+```
+
+`get_or_default` 不应当被当成消除错误的万能办法。对 `WebFetchClient`、credential、terminal 或 session handle 调用 default，会掩盖 composition root 漏注入；它适合容器确实拥有创建权的本地 tracker/counter，例如首次使用时建立空集合。判断标准是：一个默认值是否仍然代表完整、合法且受策略约束的能力。
+
+`require<T>()` 返回稳定的 `missing_resource` error code 和具体 Rust 类型名。上层可以把它区分为装配错误，而不是误报为用户输入无效或网络失败。测试应同时断言 code 与修复后路径，不要只匹配人类可读字符串。
+
+### 11.2 动态 JSON API 仍受注册表约束
+
+`get_json(category, key)` / `set_json(category, key, value)` 为 gRPC `GetToolOptions` / `SetToolOptions` 提供字符串 key 接口。它们没有绕过类型系统，而是查找提前注册的 `ResourceEntry`：
+
+```text
+("params", "grok_build.ReadFile")
+  -> registered deserialize closure
+  -> Params<ReadFileParams>
+
+("params", "unknown")
+  -> no match / false
+```
+
+动态入口的 key 是 `ResourceType::ID`，category 仍区分 params/state，反序列化 closure 仍绑定具体 Rust 类型。未知 key 被忽略或返回 false，不能在运行时创造任意 `Any`。因此它是一层受控反射，而不是无类型配置 map。
+
+注意 `set_json` 的布尔值表示“找到了 registration 并调用 setter”，不等于任意输入必然成功更新。当前 deserialize closure 对无效 JSON 采用不插入的容错行为；调用方若需要向用户精确报告 schema error，应在进入 `set_json` 前执行配置验证，而不能只检查返回 bool。
+
+## 12. 持久化协议：注册决定边界，ID 决定兼容性
+
+`Resources::serialize` 只遍历 `entries`，再从 `data` 中取对应 `TypeId`。这产生两个独立条件：
+
+1. 类型已用 `register_params` / `register_state` 注册；
+2. 该包装类型当前确实有值。
+
+只 `insert(State<T>)` 而未注册不会落盘；只注册而未插入也不会产生空对象。普通 `Cwd`、HTTP client、channel 等即使存在于 `data`，也会被静默跳过。
+
+### 12.1 `load_from` 是补丁式恢复
+
+恢复逻辑遍历当前版本已经注册的 entries，然后在输入 JSON 中寻找同 category、同 ID 的值：
+
+- 输入中的未知 key 被忽略，允许旧二进制读到新文件；
+- 输入缺少某个 key 时，当前内存值保持不变，而不是重置为 default；
+- 反序列化成功才替换对应 `Params<T>` / `State<T>`；
+- ephemeral resource 完全不受 restore 影响。
+
+“缺失保持不变”意味着装配顺序有语义：通常先建立当前版本 defaults/effective params，再加载持久化覆盖。若希望磁盘缺失代表清除，必须显式定义 tombstone 或先 remove，不能假设 `load_from` 会重置整个容器。
+
+### 12.2 `ResourceType::ID` 是外部契约
+
+`grok_build.ReadFile` 这类 ID 同时出现在：
+
+- `resources_state.json` 的 key；
+- gRPC 动态 options API；
+- 测试 fixture 和可能的外部自动化；
+- 配置合并/工具注册逻辑。
+
+重命名 Rust struct 不必改变 ID；改变 namespace/name 则相当于存储 schema migration。若确需迁移，应明确旧 ID 的读取窗口、冲突优先级和保存时是否回写新 ID。新增字段优先使用 serde default，并用旧版本 JSON fixture 做 forward-load 测试。
+
+## 13. 锁、await 与并发正确性
+
+`SharedResources = Arc<tokio::sync::Mutex<Resources>>` 保护异构容器的结构一致性，不是工具执行的全局事务锁。推荐模式是：
+
+```rust
+let (client, cwd, params) = {
+    let res = shared.lock().await;
+    (
+        res.require::<MyClient>()?.clone(),
+        res.require::<Cwd>()?.0.clone(),
+        res.get::<Params<MyParams>>().cloned().unwrap_or_default(),
+    )
+}; // guard 在这里释放
+
+client.fetch(cwd, params).await?;
+```
+
+不要在持有 guard 时执行网络、文件、终端或等待用户交互。否则一个慢工具会阻塞同 toolset 的 state update、option RPC、取消清理和其他工具，甚至与“等待某 task 更新 resource”的路径形成死锁。
+
+### 13.1 `prepare_dispatch` 先捕获，后 await
+
+`FinalizedToolset::prepare_dispatch` 在同步阶段完成：
+
+- client-facing tool name 解析与 reverse remap；
+- canonical params 构造；
+- local registry handle 和 output converter 选择；
+- per-call `ToolCallContext` 装配；
+- effective tool name 等 post-dispatch 信息捕获。
+
+它把结果放入拥有所有权的 `DispatchParts`，确保 tools read guard 在 dispatch stream 第一次 `.await` 前已经释放。这里不是微优化，而是可重入性要求：tool 执行过程中可能触发 registry/resource update、nested dispatch 或 cancel；若仍持有 registry guard，这些路径会互相等待。
+
+并发测试不应只跑两个纯计算工具。更有价值的 fixture 是让工具 A 在可控 barrier 上阻塞 I/O，同时工具 B 更新一个 resource 或读取 tool options，断言 B 不必等 A 的远端 I/O 完成。
+
+## 14. 能力安全：注入什么，就授权什么
+
+传统全局状态提供 ambient authority：只要代码能拿到全局 singleton，就可能访问所有 session、文件系统或协议 channel。能力注入把权限变成显式对象引用：工具只有拿到某个 handle，才能执行该 handle 暴露的操作。
+
+```mermaid
+flowchart LR
+    SA[SessionActor<br/>history / approval / ACP / all sessions]
+    SA -->|提炼| WH[WorkflowLaunchHandle<br/>只能请求启动 workflow]
+    SA -->|提炼| QH[UserQuestionSender<br/>只能提出问题]
+    SA -->|提炼| SE[SubagentEventSender<br/>只能发 child event]
+    WH --> T1[Workflow tool]
+    QH --> T2[Question tool]
+    SE --> T3[Subagent tool]
+```
+
+如果直接注入 `Arc<Mutex<SessionActor>>`，任何工具都可能修改历史、绕过 permission、访问其他 session，并把 actor lock 持有跨 await。窄 handle 同时实现：
+
+- **least authority**：只暴露当前用途所需方法；
+- **capability attenuation**：从强 owner 派生弱权限 adapter；
+- **可替换测试**：fixture 注入 fake sender，不需构造完整 SessionActor；
+- **生命周期清晰**：channel 关闭自然表示 owner 已结束；
+- **审计清晰**：搜索 handle 类型即可枚举所有消费者。
+
+### 14.1 装配具有 typestate-like 性质
+
+Rust 类型系统没有在编译期证明“finalized toolset 必定含 FileSystem”，因为选择集和配置在运行时决定。但 builder -> finalize -> bridge 的阶段仍形成类似 typestate 的约束：
+
+```text
+Builder       可以注册候选工具和 requirement
+Finalized     已计算选中集并装入基础资源
+Session-ready 已补入当前 session 的动态 handle/policy
+Dispatch      才能向模型暴露并执行 definition
+```
+
+`missing_resource` 表示某条运行时装配路径没有满足这个阶段协议。修复方向应是补齐 producer/rebuild，而不是在 consumer 内制造一个权力更大的 fallback。
+
+## 15. Fork、rebuild 与模型可见路径
+
+fork/rebuild 的核心不变量是：**持久化值可以恢复，动态能力必须重新颁发**。不能简单 clone 旧 `SharedResources`，因为其中可能包含指向父 session 的 channel、旧 cwd、旧取消树或旧 permission owner。
+
+### 15.1 动态注入核对表
+
+不同路径按功能可能注入下列资源：
+
+| 类别 | 例子 | 漏注入后的典型症状 |
+|---|---|---|
+| 路径/policy | `DisplayCwd`、`PlanFilePath`、`DenyReadGlobs`、`RespectGitignore` | 读错 worktree、plan 写到父目录、policy 失效 |
+| session identity | `SessionIdResource`、subagent depth/max depth | child 事件归错 session、递归限制丢失 |
+| actor adapters | `WorkflowLaunchHandle`、`UserQuestionSender`、goal/subagent sender | 工具 definition 存在但执行报 missing resource |
+| backend/client | subagent backend、managed gateway、tool index | 主 session 正常，切模型/child 后外部工具失效 |
+| scheduler state | completion reservation、background loop config | task 重复唤醒、completion 重复报告 |
+
+新增资源时至少搜索三处：初次 spawn、agent rebuild/model switch、fork/subagent spawn。若只在 builder finalise 注入一个与 session actor 绑定的 handle，它很可能捕获了错误 owner。
+
+### 15.2 `DisplayCwd` 解决历史路径与真实路径分叉
+
+fork 到新 worktree 后，模型历史中仍包含父 session 曾展示的绝对路径。如果只把 `Cwd` 改成新 worktree，模型继续提交旧绝对路径时，工具可能越过 fork 隔离访问父目录。
+
+```text
+历史/模型看到: /repo/src/lib.rs       <- DisplayCwd 的旧前缀
+fork 真实 cwd: /tmp/worktree-42       <- Cwd
+工具解析结果:  /tmp/worktree-42/src/lib.rs
+```
+
+`DisplayCwd` 允许工具识别“模型可见的旧 cwd 前缀”并重写到当前真实 cwd。它不是第二个工作目录，也不应覆盖相对路径基准。测试必须同时覆盖相对路径、旧前缀绝对路径、新 cwd 内绝对路径，以及试图跳出 worktree 的路径。
+
+`resolve_model_path` 对不匹配 `DisplayCwd` 的绝对路径会原样返回；因此 `DisplayCwd` 是兼容历史路径的重写规则，**不是 sandbox**。越界绝对路径、`..`、symlink 和 deny rule 仍必须由 permission、filesystem adapter 与 sandbox 层约束。把路径重写测试与授权测试分开，才能确认两层都没有被误当成另一层的替代品。
+
+## 16. 故障矩阵、测试策略与练习
+
+### 16.1 故障矩阵
+
+| 现象 | 更可能违反的不变量 | 排查点 |
+|---|---|---|
+| per-call cwd override 无效 | defaults 覆盖了 override | `TypedExtensions::merge_defaults` 调用方向 |
+| tool listing 与执行能力不一致 | list/call context 只装了一侧 | `ListToolsContext` 与 `ToolCallContext` producer |
+| `missing_resource` 只在切模型后出现 | rebuild 未重新颁发动态 handle | `agent_rebuild.rs::update_resource` |
+| restart 后某资源消失 | 只 insert，未 register | `register_params/state` 与 `serialize` 输出 |
+| 老状态文件加载后默认配置消失 | 把 load 当全量替换或顺序错误 | defaults 建立与 `load_from` 的先后 |
+| options API 返回成功但值未改变 | JSON 反序列化失败被容错跳过 | setter 前的 schema validation |
+| 并发工具互相卡住 | 持 `Resources`/registry guard 跨 await | clone narrow handle 后立即 drop guard |
+| fork 读取父 worktree | `DisplayCwd` / `Cwd` 组合漏注入 | fork spawn、path normalization |
+| tool 能绕过 session policy | 注入了过强 owner/ambient singleton | resource 类型的方法面与 producer |
+
+### 16.2 分层测试
+
+1. **typed container 单测**：同类型 insert 替换、newtype 并存、`merge_defaults` 保留 override、remove 后不可见。
+2. **持久化单测**：params/state round-trip、ephemeral 不序列化、未知 key 忽略、缺失 key 保留当前值、旧 JSON 缺字段。
+3. **动态 API 单测**：category/ID 精确匹配、未知 key、无效 JSON、更新后 typed getter 可见。
+4. **dispatch 并发测试**：registry guard 不跨 await、取消时 call future 被 drop、工具可用 cooperative token 收尾。
+5. **composition 测试**：初次 spawn、rebuild、mode switch、fork 和 child 都拥有相同必需能力，但 session-specific handle 指向各自 owner。
+6. **安全回归测试**：viewer metadata 缺失/错误时 feature 保持关闭，fork 旧绝对路径被映射到新 cwd，deny policy 不能因重建消失。
+
+### 16.3 源码阅读练习
+
+1. 在 [`context.rs`](../../crates/common/xai-tool-runtime/src/context.rs) 手算两组 `TypedExtensions` 经 `merge_defaults` 后的类型集合，并说明为什么 value 不需要实现 `Clone`。
+2. 在 [`resources.rs`](../../crates/codegen/xai-grok-tools/src/types/resources.rs) 追踪 `register_state::<T>` 创建的 `ResourceEntry`，直到 `serialize`、`load_from`、`get_json` 和 `set_json` 四个消费者。
+3. 给一个同时需要 config、counter、HTTP client、trace 和 cancel 的假想工具分类：哪些是 `Params`、`State`、ephemeral Resources、ToolCallContext extension，并说明每个 producer。
+4. 从 [`spawn.rs`](../../crates/codegen/xai-grok-shell/src/session/acp_session_impl/spawn.rs) 和 [`agent_rebuild.rs`](../../crates/codegen/xai-grok-shell/src/session/agent_rebuild.rs) 各列出动态 `update_resource`，找出只在单一路径出现的项并判断这是有意差异还是潜在缺口。
+5. 设计一个 barrier 测试：工具 A 持续等待，工具 B 调用 `set_json`；证明 A 在等待期间没有占用 resources lock。
+6. 为 `ResourceType::ID` 改名设计兼容迁移，明确旧新 ID 同时存在时谁优先，以及何时删除旧读取逻辑。

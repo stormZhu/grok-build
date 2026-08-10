@@ -2,6 +2,7 @@
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "$script_dir/../../.." && pwd)"
 build_dir="$(mktemp -d "${TMPDIR:-/tmp}/grok-rust-katas.XXXXXX")"
 trap 'rm -rf -- "$build_dir"' EXIT
 catalog="$script_dir/demo-catalog.tsv"
@@ -37,9 +38,9 @@ check_compile_fail "$script_dir/compile_fail/rc_is_not_send.rs" E0277
 
 async_demos=()
 seen_demos=$'\n'
-while IFS=$'\t' read -r demo track focus; do
+while IFS=$'\t' read -r demo track focus reading; do
     [[ -z "$demo" || "$demo" == \#* ]] && continue
-    if [[ -z "$track" || -z "$focus" ]]; then
+    if [[ -z "$track" || -z "$focus" || -z "$reading" ]]; then
         echo "invalid demo catalog row: $demo" >&2
         exit 1
     fi
@@ -49,6 +50,10 @@ while IFS=$'\t' read -r demo track focus; do
     fi
     if [[ ! -f "$bin_dir/$demo.rs" ]]; then
         echo "demo source missing: $bin_dir/$demo.rs" >&2
+        exit 1
+    fi
+    if [[ ! -f "$repo_root/$reading" ]]; then
+        echo "demo reading missing: $repo_root/$reading" >&2
         exit 1
     fi
     async_demos+=("$demo")

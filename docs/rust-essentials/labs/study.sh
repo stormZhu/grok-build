@@ -2,6 +2,7 @@
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "$script_dir/../../.." && pwd)"
 catalog="$script_dir/demo-catalog.tsv"
 manifest="$script_dir/async-demos/Cargo.toml"
 bin_dir="$script_dir/async-demos/src/bin"
@@ -13,7 +14,9 @@ usage() {
 命令：
   list [track]  列出全部实验，或只列一条学习路径
   tracks        列出学习路径及实验数量
-  show <bin>    显示实验目标、源码和运行命令
+  show <bin>    显示实验目标、源码、精读和完成证据
+  checklist [track]
+                输出全部实验或一条路径的 Markdown 检查表
   run <bin>     运行一个实验
   path <track>  按顺序运行一条学习路径
   all           运行 Katas、compile-fail 和全部 async demos
@@ -41,14 +44,15 @@ validate_catalog() {
     [[ -r "$catalog" ]] || fail "找不到目录：$catalog"
 
     local seen=$'\n'
-    local demo track focus
+    local demo track focus reading
     local count=0
-    while IFS=$'\t' read -r demo track focus; do
+    while IFS=$'\t' read -r demo track focus reading; do
         [[ -z "$demo" || "$demo" == \#* ]] && continue
-        [[ -n "$track" && -n "$focus" ]] || fail "目录字段不完整：$demo"
+        [[ -n "$track" && -n "$focus" && -n "$reading" ]] || fail "目录字段不完整：$demo"
         is_known_track "$track" || fail "未知学习路径：$track"
         [[ "$seen" != *$'\n'"$demo"$'\n'* ]] || fail "重复实验：$demo"
         [[ -f "$bin_dir/$demo.rs" ]] || fail "实验源码不存在：$demo.rs"
+        [[ -f "$repo_root/$reading" ]] || fail "精读文档不存在：$reading"
         seen+="$demo"$'\n'
         count=$((count + 1))
     done < "$catalog"
@@ -60,13 +64,15 @@ validate_catalog() {
 
 load_demo() {
     local wanted="$1"
-    local demo track focus
+    local demo track focus reading
     demo_track=""
     demo_focus=""
-    while IFS=$'\t' read -r demo track focus; do
+    demo_reading=""
+    while IFS=$'\t' read -r demo track focus reading; do
         if [[ "$demo" == "$wanted" ]]; then
             demo_track="$track"
             demo_focus="$focus"
+            demo_reading="$reading"
             return 0
         fi
     done < "$catalog"
@@ -75,7 +81,7 @@ load_demo() {
 
 print_tracks() {
     awk -F '\t' '
-        !/^#/ && NF >= 3 {
+        !/^#/ && NF >= 4 {
             if (!seen[$2]++) order[++count] = $2
             totals[$2]++
         }
@@ -94,8 +100,8 @@ list_demos() {
         is_known_track "$wanted_track" || fail "未知学习路径：$wanted_track"
     fi
 
-    local demo track focus current_track=""
-    while IFS=$'\t' read -r demo track focus; do
+    local demo track focus reading current_track=""
+    while IFS=$'\t' read -r demo track focus reading; do
         [[ -z "$demo" || "$demo" == \#* ]] && continue
         [[ -z "$wanted_track" || "$track" == "$wanted_track" ]] || continue
         if [[ "$track" != "$current_track" ]]; then
@@ -114,7 +120,9 @@ show_demo() {
     printf '路径：%s\n' "$demo_track"
     printf '目标：%s\n' "$demo_focus"
     printf '源码：docs/rust-essentials/labs/async-demos/src/bin/%s.rs\n' "$demo"
+    printf '精读：%s\n' "$demo_reading"
     printf '运行：docs/rust-essentials/labs/study.sh run %s\n' "$demo"
+    echo "证据：解释断言，并写出 owner、边界、失败分支和一条源码或测试证据"
 }
 
 run_demo() {
@@ -124,15 +132,43 @@ run_demo() {
     echo "==> $demo [$demo_track]"
     echo "预测：$demo_focus"
     cargo run --quiet --locked --manifest-path "$manifest" --bin "$demo"
+    echo "下一步精读：$demo_reading"
+    echo "完成前：写出 owner、边界、失败分支和一条源码或测试证据"
+}
+
+print_checklist() {
+    local wanted_track="${1:-}"
+    if [[ -n "$wanted_track" ]]; then
+        is_known_track "$wanted_track" || fail "未知学习路径：$wanted_track"
+    fi
+
+    echo "# Grok Build demo 学习检查表"
+    echo
+    echo "只有在完成预测、运行、精读和证据记录后才勾选。"
+
+    local demo track focus reading current_track=""
+    while IFS=$'\t' read -r demo track focus reading; do
+        [[ -z "$demo" || "$demo" == \#* ]] && continue
+        [[ -z "$wanted_track" || "$track" == "$wanted_track" ]] || continue
+        if [[ "$track" != "$current_track" ]]; then
+            echo
+            echo "## $track"
+            echo
+            current_track="$track"
+        fi
+        printf -- '- [ ] `%s`：%s\n' "$demo" "$focus"
+        printf '  - 精读：`%s`\n' "$reading"
+        echo "  - 证据：预测、owner、边界、失败分支、运行或测试结果"
+    done < "$catalog"
 }
 
 run_path() {
     local wanted_track="$1"
     is_known_track "$wanted_track" || fail "未知学习路径：$wanted_track"
 
-    local demo track focus
+    local demo track focus reading
     local demos=()
-    while IFS=$'\t' read -r demo track focus; do
+    while IFS=$'\t' read -r demo track focus reading; do
         [[ -z "$demo" || "$demo" == \#* ]] && continue
         [[ "$track" == "$wanted_track" ]] || continue
         demos+=("$demo")
@@ -159,6 +195,10 @@ case "$command" in
     show)
         [[ $# -eq 2 ]] || fail "show 需要一个 bin 名"
         show_demo "$2"
+        ;;
+    checklist)
+        [[ $# -le 2 ]] || fail "checklist 最多接受一个学习路径名"
+        print_checklist "${2:-}"
         ;;
     run)
         [[ $# -eq 2 ]] || fail "run 需要一个 bin 名"

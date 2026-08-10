@@ -44,9 +44,12 @@ docs/rust-essentials/labs/study.sh show mini_turn_end_to_end
 # 单独运行，或按目录顺序运行整条路径
 docs/rust-essentials/labs/study.sh run mini_turn_end_to_end
 docs/rust-essentials/labs/study.sh path turn
+
+# 生成一份要求预测、精读和证据的 Markdown 检查表
+docs/rust-essentials/labs/study.sh checklist turn
 ```
 
-`study.sh` 在每次运行前打印观察目标；它不记录“已完成”状态，也不会跳过实验。先把预测写进自己的学习记录，再运行并解释断言。六条路径来自同一份 [`demo-catalog.tsv`](./demo-catalog.tsv)，一键校验也读取这份目录，因此新增 bin 后若忘记登记会立即失败。
+`study.sh` 在每次运行前打印观察目标，运行后给出对应生产专题和完成证据。`checklist` 只向标准输出生成 Markdown，不会偷偷记录“已完成”状态；只有完成预测、运行、精读和证据记录后才应手动勾选。六条路径及精读映射来自同一份 [`demo-catalog.tsv`](./demo-catalog.tsv)，一键校验也读取这份目录，因此新增 bin、遗漏专题或路径写错时会立即失败。
 
 | 路径 | 数量 | 适合解决的问题 |
 | --- | ---: | --- |

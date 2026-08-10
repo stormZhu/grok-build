@@ -308,3 +308,216 @@ cargo run --locked \
 5. 设计一个测试：第三方 BYOK endpoint 返回 401。写出应断言的负面性质，即 AuthManager 的 session refresh 不应被调用。
 
 完成后，你应能将“模型不可用”拆成可验证的问题：模型目录、选择、credential source、endpoint 安全边界、refresh 状态机或采样错误策略，而不是笼统地反复登录或重复发送请求。
+
+## 10. 模型合并不是整条目覆盖，而是逐字段 lattice
+
+把 model resolution 简化成 `config > remote > defaults` 仍不够精确。最终条目包含 alias key、wire slug、context window、backend、agent type、headers、reasoning efforts 等字段；不同字段的“未设置”表达也不同。
+
+```text
+base catalog membership
+  -> hardcoded defaults，或 prefetched catalog（包括 Some(empty)）
+  -> 全局 [models] fallback 只填空位
+  -> [model.<alias>] 显式 override
+  -> 同 wire model slug 的受限 metadata propagation
+  -> visibility / supported-in-api filtering
+```
+
+`prefetched: None` 表示没有远端目录事实，可以使用 bundled base；`prefetched: Some(empty)` 表示服务器明确返回空目录，结果不应偷偷恢复 bundled models。这是 Option 与 empty collection 的协议差异，测试必须分别覆盖。
+
+### 10.1 同 slug 不等于同 harness
+
+配置 key `grok-build` 与远端 key `grok-4.5` 可能都指向 `ModelInfo.model = "grok-4.5"`。为了避免默认选择落到只有 fallback context window 的 sibling，resolution 会传播部分 metadata；但不能复制整个条目：
+
+- context window 只在 recipient 仍是 parser fallback 时继承，显式值不能覆盖；
+- `api_backend` 可以跟随同一 wire API 语义；
+- `agent_type` 不传播，因为每个 alias 可能选择不同 harness/prompt；
+- reasoning efforts 的显式 config list 高于 remote list；
+- alias/name/model 仍保持各自角色，不能被 slug propagation 合并为一个标识。
+
+这类合并最好用“字段来源表”测试，而不是只 snapshot 最终 JSON。失败时才能知道是 membership、fallback、override 还是 propagation 出错。
+
+### 10.2 HTTP header 名大小写不敏感
+
+全局 `extra_headers` 只填 per-model 未覆盖的 key，且比较必须 ASCII case-insensitive。否则：
+
+```text
+global:    X-Request-Tags: global
+per-model: x-request-tags: private
+```
+
+最终 map 会同时包含两个逻辑相同的 header，HTTP client 的合并/发送顺序决定谁生效。正确结果只保留 per-model 版本。认证 header 更不能依赖普通 extra-header precedence；`Authorization`、token-auth marker 等应由 credential resolver/HTTP auth owner 构造，避免用户配置与 session token 形成双头事实。
+
+## 11. `SamplerConfig` 是一次请求的 immutable snapshot
+
+模型目录和 `AuthManager` 都会变化，正在执行的 HTTP request 却必须看到一致配置。`prepare_sampler_for_turn` 将当时的 model、base URL、backend、headers、credential 和预算复制进新的 `SamplerConfig`，再交给 sampler actor。
+
+这个 snapshot 边界解决两个竞态：
+
+1. catalog refresh 不能在 SSE 中途改变解析 backend 或 context window；
+2. token refresh 不能原地修改已经发出的 request header，让 tracing/重试无法判断实际发送了哪个 credential。
+
+恢复后重提必须重新构建 snapshot。重用原 request builder 即使 `AuthManager` 已更新，也可能继续携带旧 `Authorization`。反过来，正常 transport retry 若语义上属于同一 attempt，需要明确它是否重新 apply live provider；不能让实现细节隐式决定 auth policy。
+
+### 11.1 model switch 是复合事务
+
+一次成功切换至少需要同步：
+
+```text
+selected model ID
+  -> resolved ModelEntry
+  -> credential source + endpoint gate
+  -> SamplerConfig/backend
+  -> context window / compaction policy
+  -> tool/agent definition rebuild（若 agent_type 变化）
+  -> session update / UI confirmation
+```
+
+只更新 sampler model string 会留下旧 context budget 或旧 harness；只更新 UI 会让下一 turn 仍请求旧 endpoint。测试应在切换后真正提交一次 mock request，并断言 wire model、origin、backend、header presence 和 compact threshold，而不是只检查 manager 的 selected field。
+
+## 12. Credential snapshot、live provider 与 endpoint scope
+
+不同 consumer 对凭据的读取方式不同：主 sampler 可在 turn 前重建 config，upload、embedding、OTel exporter 等长寿命 client 更适合持有 `AuthCredentialProvider`，在每次请求取 snapshot。
+
+`CredentialSnapshot` 只暴露 consumer 所需事实：可发送 token、user/team/organization/deployment identity、API key ID 等。provider 的 `Debug` 必须脱敏；snapshot 也不应被整体记录。
+
+### 12.1 precedence 必须在 provider 内统一
+
+`ShellAuthCredentialProvider` 中 deployment key 高于 session credential。存在 deployment key 时：
+
+- `snapshot` 返回 deployment token/ID；
+- 不附加普通 session token-auth 语义；
+- 401 recovery 不调用 session `AuthManager` refresh。
+
+否则 provider 从 live `AuthManager::current_wire_valid()` 取 bearer，并允许 unauthorized recovery。若每个 upload/client 自己实现 precedence，很容易出现请求用 deployment key、401 却刷新用户 OIDC 的错配。
+
+### 12.2 endpoint-scoped credentials 防止旁路泄漏
+
+embedding 使用 `EndpointScopedCredentials::for_endpoint`：只有通过 `is_xai_api_bearer_url` 且为 HTTPS 的 xAI-operated endpoint 才附加 session credential；其他 endpoint 使用明确 API-key provider 或无凭据。
+
+这条规则必须覆盖所有非 sampler consumer。主模型 endpoint gate 正确，不代表 memory embedding、repo upload、managed MCP 或 telemetry exporter 自动安全。每新增一个 HTTP client，应回答：
+
+1. endpoint 由谁配置和验证；
+2. bearer 在 request build 的哪一刻读取；
+3. 401 由谁归因和恢复；
+4. deployment/session/API key 的 precedence；
+5. 日志只记录哪种 redacted identity。
+
+## 13. Interactive auth single-flight 是带 generation 的 owner
+
+设备码/loopback 登录会同时持有 cancellation token、code sender 和 URL receiver。`AuthSingleFlight` 把它们放在一个 `Attempt` 中，`begin` 原子替换 active attempt 并取消 predecessor：
+
+```mermaid
+sequenceDiagram
+    participant U as Client
+    participant SF as AuthSingleFlight
+    participant A1 as Attempt generation 1
+    participant A2 as Attempt generation 2
+    U->>SF: begin(seq=10)
+    SF->>A1: own token + channels
+    U->>SF: begin(seq=11)
+    SF->>A1: cancel
+    SF->>A2: install token + channels
+    A1-->>SF: late finish generation 1
+    Note over SF: generation mismatch，不清 A2
+    U->>SF: cancel_for_client_seq(10)
+    Note over SF: stale seq，不取消 A2
+```
+
+RAII `AuthAttemptGuard` 保证 authenticate future 被 abort 时仍调用 `end(generation)`；generation check 保证旧 future 的 Drop 不会清除新 attempt。Pager 的 `request_seq` 进一步约束显式 cancel，避免网络延迟的旧取消杀掉后续登录。
+
+单飞不仅减少重复登录窗口，更保护一次性 code/url channel 的所有权。只共享一个全局 cancel token、把 channels 分散存储，会让旧 attempt 的 cleanup 拆掉新 attempt 的交互界面。
+
+## 14. Refresh concurrency：内存锁、文件锁和 authority call
+
+认证刷新跨越 task 与进程，至少有三层协调：
+
+| 层 | 防止的竞争 | 关键规则 |
+|---|---|---|
+| 内存 `refresh_lock` | 同进程多个 401 同时刷新 | lock 后重新检查当前 token/verdict |
+| `auth.json.lock` | 多进程消费同一个 rotating refresh token | authority call 与结果持久化期间保持唯一 owner |
+| credential identity | 迟到 401 / sibling token / provider config 变化 | 只让 verdict 和 recovery 作用于实际尝试的 credential |
+
+刷新链在获得内存锁后重新查看 current token：另一个 task 可能已完成刷新；`ServerRejected` 只有当 token 与入锁前相同才强制继续。随后获取文件锁，先尝试 adopt sibling 写入的新 token；只有仍无新事实时才调用 IdP。
+
+### 14.1 irreversible refresh 不能随便 cancel
+
+一旦 rotating refresh token 已发送给 IdP，直接 drop future 可能丢掉响应中的新 refresh token，导致整个 token family 被旧值永久锁死。因此 authority exchange 开始后让 in-flight call 完成，并通过 sleep gate/hold-awake 协调系统 suspend：
+
+- sleep 已 imminent 时，在调用 IdP 前 defer；
+- call 已在途时，sleep ack 有界等待它 drain；
+- dark wake 没有正常 sleep 通知时，best-effort hold awake；
+- deferral 是 transient，不应累计成 permanent revocation verdict。
+
+这与普通 HTTP GET 的 cancel 语义不同。可取消边界应放在“发送 rotating credential 之前”，不可逆之后依靠 bounded completion 与 durable write。
+
+## 15. Credential-scoped verdict 与迟到 401
+
+永久失败缓存不能只是 `bool auth_broken`。`ScopedRefreshFailure` 绑定实际尝试的 credential key、失败原因和双时钟时间：
+
+```text
+verdict applies iff
+  attempted credential identity == recorded token_key
+  and (reason sticky or TTL not expired)
+```
+
+它解决以下竞态：
+
+- sibling process 已写入不同 refresh token：旧 verdict 不得阻止新 token；
+- 内存 access token 被替换，但磁盘 refresh token 未变：verdict 仍应限制对同一 dead RT 的 IdP storm；
+- `RefreshTokenRejected` 是 sticky，直到 login/logout/credential change；
+- transient/escalated verdict 可由 monotonic 或 wall clock 任一达到 TTL 后失效，跨 suspend 也能恢复；
+- wire-valid access token 即使对应 RT 有 verdict，真实 expiry 前仍可服务请求，但不能再次调用已知失败的 refresher。
+
+### 15.1 `ServerRejected` 与 `PreRequest` 的不同采用规则
+
+`PreRequest` 可以使用仍 fresh 的 current/disk token；`ServerRejected` 必须证明 candidate 与刚被拒绝的 key 不同。否则“reload disk”只是把同一 bearer 再发一次，形成每 turn 401 循环。
+
+两个并发请求都携带 token A，A 被刷新为 B 后，第二个请求的迟到 401 不应再把 B 立刻刷新成 C。lock 后 token identity re-check/fresh-mint guard 应让它采用 B。测试不能只串行模拟 401，必须控制两个请求的响应顺序。
+
+## 16. 401 attribution：知道哪个 consumer 发了哪个 token
+
+共享 `AuthManager` 的 consumer 不止 sampler。Storage、OTel、managed MCP 等各自可能返回 401；若日志只有“auth 401”，无法判断是 token 真失效、某个 client 缓存旧 snapshot，还是 endpoint/marker 错配。
+
+attribution 事件应包含：
+
+- consumer kind 与 operation；
+- session/request correlation；
+- sent bearer 的不可逆短 prefix/fingerprint，而不是 token；
+- AuthManager 当前 credential 是否与 sent identity 一致；
+- recovery decision 与新旧 identity 是否变化。
+
+`StorageClientAttributionBridge` 把 file-utils 的 callback 接回 shell auth owner，而不让底层 crate 依赖整个 shell。长寿命 client 必须同时得到 live provider 和 attribution callback；只给静态 token 会造成 refresh 前缓存窗口，且 401 没有足够证据定位。
+
+### 16.1 ancillary consumer 矩阵
+
+| consumer | credential 读取时机 | endpoint gate | 401 owner |
+|---|---|---|---|
+| main sampler | turn 前构造 `SamplerConfig` | model/auth gate | Session turn recovery budget |
+| embedding/memory | request provider snapshot | xAI HTTPS predicate | endpoint credential/provider |
+| storage/upload | live provider per request | proxy factory/config | provider + attribution bridge |
+| OTel exporter | bootstrap manager，后 hot-swap live manager | exporter config | refreshable exporter/provider |
+| managed MCP | managed config header + refresh context | managed proxy/config | MCP reauth state machine |
+
+不能把所有 401 都塞进 Session turn budget：后台 upload 可能发生在 turn 结束后，OTel exporter 甚至不属于某个 session。它们共享 credential authority，但各自拥有请求重试和用户可见失败语义。
+
+## 17. 安全测试矩阵与进阶练习
+
+| 风险 | 正向断言 | 必须同时断言的负面性质 |
+|---|---|---|
+| custom model endpoint | 使用其显式 BYOK/provider | 从未读取或发送 session bearer |
+| global/per-model headers | per-model case-insensitive override | 不产生大小写变体重复 header |
+| concurrent 401 | 至多一次 authority refresh，后者采用新 token | 迟到 401 不触发第二次 fresh mint |
+| sibling rotation | 文件锁下 adopt 新 disk token | 不再消费旧 rotating RT |
+| interactive login replacement | predecessor 被 cancel，successor channels 可用 | stale end/cancel 不清 successor |
+| sticky verdict | 同 credential 快速 short-circuit | credential 改变后不继续阻塞 |
+| sleep deferral | 返回 transient 并在唤醒后可恢复 | 不记录 permanent failure/KPI revocation |
+| ancillary client | 请求时读取 live provider | log、Debug、callback 不暴露 bearer |
+
+进阶练习：
+
+1. 为 `prefetched=None`、`Some(empty)`、`Some(models)` 写三格 catalog membership 预期，并解释为何 empty 不能回退 bundled defaults。
+2. 给两个 alias 指向同 slug 的条目制作字段来源表，逐项判断 context window、backend、agent type、reasoning efforts 是否传播。
+3. 模拟 request R1/R2 都发送 token A：R1 401 后刷新 B，R2 再迟到 401；写出每次 lock 前后应观察的 credential identity。
+4. 画出 `AuthSingleFlight` generation 1 的 guard 在 generation 2 建立后 Drop 的状态，证明 active channels 不被清除。
+5. 审计一个新 background HTTP client：列出 endpoint gate、provider snapshot、401 attribution、retry owner 和 secret-redaction 五项实现证据。
+6. 设计 property test：对任意 header 大小写组合，合并结果中每个 case-insensitive key 最多出现一次，且 per-model value 优先。
